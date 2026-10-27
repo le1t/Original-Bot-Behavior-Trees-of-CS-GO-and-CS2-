@@ -1,712 +1,5 @@
-# Original-Bot-Behavior-Trees-of-CS-GO-and-CS2
+#Original Bot Behavior Trees of CSGO and CS2
 
-Википедия по ботам CS:GO и CS2 на Behavior Trees
-Введение
-Behavior Tree (BT) — это декларативная система описания поведения ботов, используемая в Counter-Strike: Global Offensive (CS:GO) и Counter-Strike 2 (CS2). Вместо императивного C++ кода (как в слитом NextBot) поведение задаётся в KV3-файлах как дерево узлов, которое игра вычисляет каждый тик. Деревья используются в режимах Deathmatch, Arms Race, Rush, обучении (Practice) и Guardian. Любой сервер или карта может указать собственное дерево через ConVar mp_bot_ai_bt.
-
-Важно: слитый C++ код NextBot относится к архитектуре CS:GO/Left 4 Dead и не используется в CS2. Для создания ботов в CS2 рабочим инструментом являются KV3-файлы и понимание модели выполнения узлов. C++ код может быть полезен только для понимания общих идей (приоритеты, память), но не для копирования структур.
-
-Выбор дерева и конфигурация
-ConVar mp_bot_ai_bt задаёт путь к файлу .kv3 (например, scripts/ai/deathmatch/bt_default.kv3). Если пуст, используется классический ИИ.
-
-После редактирования дерева необходимо выполнить mp_bot_ai_bt_clear_cache и переспавнить ботов (перезапустить раунд).
-
-Официальные режимы задают свои деревья в конфигах:
-
-Deathmatch / DM Freeforall: scripts/ai/deathmatch/bt_default.kv3
-
-Arms Race: scripts/ai/armsrace/bt_default.kv3
-
-Rush: scripts/ai/rush/bt_default.kv3
-
-New User Training: scripts/ai/practice/newplayer_dust2_01.kv3
-
-Деревья и модули поставляются в game/csgo/pak01_dir.vpk и могут быть извлечены через Source2 Viewer.
-
-Пользовательское дерево можно разместить в scripts/ai/ (например, scripts/ai/mymode/bt_default.kv3) и указать в mp_bot_ai_bt.
-
-Формат файлов KV3
-Файл дерева имеет заголовок:
-
-text
-<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
-Далее идёт объект с ключами config (путь к конфигу) и root (корневой узел). Пример:
-
-kv3
-{
-    config = "scripts/ai/deathmatch/bt_config.kv3"
-    root =
-    {
-        type = "decorator_repeat"
-        child =
-        {
-            type = "sequencer"
-            children =
-            [
-                { type = "action_move_to" destination = "bot_target" movement_type = "BT_ACTION_MOVETO_RUN" route_type = "BT_ACTION_MOVETO_FASTEST_ROUTE" }
-                { type = "action_look_at" input_location = "bot_target" }
-                { type = "action_wait" wait_time_min = 2 wait_time_max = 3 }
-            ]
-        }
-    }
-}
-Каждый узел — таблица с ключом type. Декораторы и условия оборачивают одного ребёнка через child; композиты содержат массив children.
-
-Имена ключей регистронезависимы, комментарии // разрешены.
-
-Subtree-файлы содержат один узел верхнего уровня без config и root.
-
-Конфигурационный файл (bt_config.kv3)
-Конфиг задаёт «мышечную память» бота: скорость прицеливания, реакцию, стрельбу. Он ортогонален логике дерева.
-
-Уровни скилла
-CS:GO: default, low, fair, normal, tough, hard, very_hard, expert (8 уровней).
-
-CS2: добавлен elite (9 уровней). В предоставленных файлах присутствуют все 9.
-
-Каждый уровень наследует недостающие ключи из default.
-
-Параметры прицеливания
-Параметр	Тип	Назначение
-aim_target_acquisition_lerp_time	float	Время «доезда» прицела до новой цели
-aim_target_acquisition_lerp_time_deviation	float	Разброс этого времени
-aim_target_acquisition_angle_penalty	float	Штраф за угловое расстояние до цели
-aim_target_acquisition_angle_penalty_deviation	float	Разброс штрафа
-aim_target_acquisition_angle_penalty_reduction_ratio	float	Насколько штраф уменьшается со временем
-aim_target_acquisition_angle_tolerance	float	Допуск угла при захвате
-aim_target_acquisition_angle_lerp_bias	float	Сглаживание угла захвата
-aim_target_tracking_lerp_time	float	Скорость сопровождения цели
-aim_target_tracking_lerp_time_deviation	float	Разброс сопровождения
-aim_target_tracking_focus_interval	float	Интервал «фокуса» при трекинге
-aim_target_tracking_focus_interval_deviation	float	Разброс интервала
-aim_target_tracking_angle_lerp_bias	float	Сглаживание трекинга
-aim_ready_angle_tolerance	float	Угол, при котором action_attack считает прицел готовым (в CS:GO не документирован)
-aim_new_target_angle_tolerance	float	Угол для переключения на новую цель
-aim_max_duration	float	Максимальное время прицеливания
-aim_max_duration_deviation	float	Разброс макс. времени
-aim_punch_angle_reaction_chance	float	Шанс реакции на punch angle (отдача)
-Параметры осмотра
-Параметр	Назначение
-look_around_awareness_yaw_range	Макс. угол поворота по горизонтали (градусы)
-look_around_awareness_pitch_range	Макс. угол по вертикали
-look_around_focus_interval	Пауза между поворотами камеры
-look_around_focus_interval_deviation	Разброс паузы
-look_around_lerp_time	Время поворота камеры
-look_around_lerp_time_deviation	Разброс времени
-look_around_lerp_bias	Сглаживание движения камеры
-Реакция и бой
-Параметр	Назначение
-reaction_time	Задержка перед реакцией на событие (сек)
-combat_crouch_chance	Шанс присесть в бою (0–1)
-combat_dodge_command_duration	Длительность команды уклонения
-combat_dodge_command_duration_deviation	Разброс длительности
-Таблица attack
-Каждая строка — 5 чисел: burst duration, duration deviation, cadence, cooldown, cooldown deviation.
-Порядок строк:
-
-CS:GO (16 строк): KNIFE, PISTOL, SUBMACHINEGUN, RIFLE, SHOTGUN, SNIPER_RIFLE, MACHINEGUN, C4, TASER, GRENADE, EQUIPMENT, STACKABLEITEM, FISTS, BREACHCHARGE, BUMPMINE, TABLET, MELEE, SHIELD, WEAPONTYPE_ZONE_REPULSOR, UNKNOWN (фактически 16? В предоставленном CS:GO конфиге 16 строк: KNIFE, PISTOL, SUBMACHINEGUN, RIFLE, SHOTGUN, SNIPER_RIFLE, MACHINEGUN, C4, TASER, GRENADE, EQUIPMENT, STACKABLEITEM, FISTS, BREACHCHARGE, BUMPMINE, TABLET, MELEE, SHIELD, WEAPONTYPE_ZONE_REPULSOR, UNKNOWN — это 20? Проверим: в файле bt_config.txt (CS:GO) строки: KNIFE, PISTOL, SUBMACHINEGUN, RIFLE, SHOTGUN, SNIPER_RIFLE, MACHINEGUN, C4, TASER, GRENADE, EQUIPMENT, STACKABLEITEM, FISTS, BREACHCHARGE, BUMPMINE, TABLET, MELEE, SHIELD, WEAPONTYPE_ZONE_REPULSOR, UNKNOWN. Это 20 строк? Но в вики CS:GO сказано 16 строк. Возможно, в предоставленном файле 16 строк, просто комментарии сгруппированы. Посмотрим: в CS:GO bt_config.txt после STACKABLEITEM идут FISTS, BREACHCHARGE, BUMPMINE, TABLET, MELEE, SHIELD, WEAPONTYPE_ZONE_REPULSOR, UNKNOWN — это 8 дополнительных, итого 12+8=20. Но в вики CS:GO указано 16 строк: KNIFE, PISTOL, SUBMACHINEGUN, RIFLE, SHOTGUN, SNIPER_RIFLE, MACHINEGUN, C4, TASER, GRENADE, EQUIPMENT, STACKABLEITEM, FISTS, BREACHCHARGE, BUMPMINE, TABLET, MELEE, SHIELD, WEAPONTYPE_ZONE_REPULSOR, UNKNOWN — это 20. Возможно, в вики ошибка или в файле лишние. В CS2 ровно 13 строк: KNIFE, PISTOL, SUBMACHINEGUN, RIFLE, SHOTGUN, SNIPER_RIFLE, MACHINEGUN, C4, TASER, GRENADE, EQUIPMENT, STACKABLEITEM, UNKNOWN.
-
-CS2: 13 строк в фиксированном порядке: KNIFE, PISTOL, SUBMACHINEGUN, RIFLE, SHOTGUN, SNIPER_RIFLE, MACHINEGUN, C4, TASER, GRENADE, EQUIPMENT, STACKABLEITEM, UNKNOWN. Если строк не 13, конфиг отвергается с ошибкой [AI BT]: Config node 'attack' must contain 13 entries.
-
-Пример для RIFLE в default:
-[ 0.22, 0.07, 0.0, 0.45, 0.15 ] — очередь ~0.22 с (±0.07), без паузы внутри (cadence 0), перезарядка/новая очередь через 0.45 с (±0.15).
-
-Узлы (Nodes)
-Типы значений
-Тип	Значение
-bool	0 или 1
-int, float	Литеральное число
-number	Число, ConVar (@mp_...) или ключ blackboard
-position	Литерал ("x y z"), ключ blackboard или targetname энтити
-string	Литерал в '...' или ключ blackboard
-enum	Значение из таблицы Enum
-node, node[]	Дочерний узел / массив узлов
-Enum-значения
-Ключ	Значения
-entity_type_filter	ALL, PLAYERS, HUMAN_PLAYERS, NOISE, DAMAGE, AREA_DAMAGE, CLASSNAME, GRENADE
-team_filter, attacker_filter	ANY, CT, TERRORIST, SAME, OPPOSITE, ENEMY
-team	ANY, CT, TERRORIST, OPPOSITE
-team_restriction	ANY, CT, T
-shape type	sensor_shape_fov, sensor_shape_sphere (с radius)
-movement_type	BT_ACTION_MOVETO_WALK, BT_ACTION_MOVETO_RUN
-route_type	BT_ACTION_MOVETO_FASTEST_ROUTE, BT_ACTION_MOVETO_SAFEST_ROUTE
-slot	RIFLE, PISTOL, KNIFE, GRENADES, C4
-types (гранаты)	FLASH, FIRE, EXPLOSIVE, DECOY, SMOKE
-operation_type	BT_DECORATOR_TAG_ENTITY_SET, BT_DECORATOR_TAG_ENTITY_CLEAR
-check_type	BT_DECORATOR_TAG_THRESHOLD_AT_LEAST, BT_DECORATOR_TAG_THRESHOLD_AT_MOST
-weapon	BEST или classname (например, weapon_knife)
-Композиты
-Узел	Ключи	Поведение	Статус
-parallel	succeed_after_first (bool), children	Все дети каждый тик. Провал любого = провал. Успех = все (или первый при флаге)	Официальный
-selector	children	Список приоритетов. Проверка с первого ребёнка каждый тик. Более ранний прошедший — останавливает текущего и запускается	Официальный
-sequencer	children	По порядку. Провал = стоп. Check-pass смотрит только на текущего ребёнка — пройденные условия не перепроверяются	Официальный
-subtree	file (string), name (string), params ({key, value}[])	Запуск другого дерева. params пишут значения в blackboard до старта. Только int или string — float/bool отвергаются	Официальный
-Декораторы
-Декораторы оборачивают одного ребёнка через child. Почти все поддерживают negated = 1.
-
-Узел	Ключи	Назначение	Статус в CS2
-decorator_bot_service	memory_to_expire[], tagged_entities_to_expire[], input_chatter_enemies, basic_chatter_enable, chatter_outnumbered_threshold, child	Корневой сервис: истечение памяти, болтовня	Официальный
-decorator_buy_service	output, child	Возвращает массив к покупке	Официальный
-decorator_hiding_spot_service	domain, output_hiding_spot, expiration_time, distance_threshold, child	Учёт укрытий; боты в одном домене не проверяют уже проверенные	Официальный
-decorator_maybe	chance (float), child	Выполняет ребёнка с шансом (1 = 100%)	Официальный
-decorator_memory	input, output, output_domain, child	Копирует сущности в память	Официальный
-decorator_need_healing	health_threshold, child	Ребёнок, если HP ниже порога	Официальный
-decorator_picker_blocked_by_smoke	input, input_domain, output, output_domain, negated, child	Убирает сущности, не покрытые дымом (параметр distance_threshold игнорируется)	Официальный
-decorator_picker_dedup	input, input_domain, output, output_domain, against, distance_threshold, negated, child	Убирает дубликаты по дистанции до against	Официальный
-decorator_picker_grenade_type	input, input_domain, output, output_domain, types[], negated, child	Фильтр гранат по типу	Официальный
-decorator_picker_max_score	input, input_domain, output, output_domain, negated, child	Берёт первую сущность (по умолчанию — по порядку на сервере)	Официальный
-decorator_picker_nearby	input, input_domain, output, output_domain, cutoff_distance, negated, child	Убирает дальше порога	Официальный
-decorator_picker_random_by_distance	input, input_domain, output, output_domain, distance_min, distance_max, negated, child	Вероятностный фильтр по дистанции	Официальный
-decorator_picker_reaction_time	input, input_domain, output, output_domain, negated, child	Задержка по реакции бота	Официальный
-decorator_picker_visible	input, input_domain, output, output_domain, check_fov (bool), negated, child	Убирает невидимые. check_fov = 0 игнорирует FOV	Официальный
-decorator_picker_weight_as_distance	input, input_domain, output, output_domain, negated, child	Фильтр по «весу» (для слуха)	Официальный
-decorator_random_approach_point	output, child	Случайная видимая точка-«вход» в область	Официальный
-decorator_random_int	min, max, output, child	Случайное целое	Официальный
-decorator_ranker_dist	input, child	Сортирует по дистанции	Официальный
-decorator_remove	input_domain, input, remove, child	Удаляет сущности из памяти	Официальный
-decorator_remove_key	input, child	Удаляет ключ blackboard	Официальный
-decorator_repeat	amount (int), child	Цикл. Без amount — вечно; с N — N раз	Официальный
-decorator_run_once	domain, max_attempts, child	Ограничивает запуск. domain — только один бот выполнит	Официальный
-decorator_sensor	output, class_name, priority, orphan_only, append_items, entity_type_filter, team_filter, attacker_filter, shape({type, radius}), child	Заполняет output sensed-сущностями	Официальный
-decorator_set_reaction_time	input, child	Задержка по реакции	Официальный
-decorator_succeed	negated, child	Всегда проходит check-pass; после ребёнка — success (или failure при negated=1)	Официальный
-decorator_tag_entity	input, output, expiration_time, operation_type, child	Помечает первую сущность из input	Официальный
-decorator_tag_threshold	entity_input, tagged_entities_input, amount, check_type, child	Сравнивает количество помеченных	Официальный
-decorator_token_service	config({tokens[], assignments[][], team_restriction[]}), output_token_name, output_token_domain, domain, child	Группы ботов (StratTokens)	Официальный
-decorator_try_lock	domain, child	Блокировка домена — только один бот одновременно	Официальный
-decorator_invert	child	Инверсия check-результата ребёнка	Не используется в официальных деревьях CS2 (в CS:GO мог быть workaround)
-decorator_dec_global_counter	input_name, child	Уменьшает счётчик	Не используется
-decorator_find_utility_strat	много	—	Не используется
-decorator_route_service	много	—	Не используется
-decorator_set_barrier	много	—	Не используется
-decorator_wait_success	timeout, child	Ждёт успеха ребёнка или таймаута	Не используется в основных деревьях CS2, но встречается в Guardian
-decorator_game_event	—	Упоминается в патчноутах, но отсутствует в коде	Не существует
-Важно: Source2 Wiki указывает, что параметры acquire_only у action_aim, ratio у action_pull_trigger и distance_threshold у decorator_picker_blocked_by_smoke не читаются игрой. Однако в предоставленных официальных файлах они присутствуют (acquire_only = 1, ratio = 1, distance_threshold = 3000) — вероятно, наследие старых версий; не полагайтесь на них.
-
-Условия
-Узел	Ключи	Назначение	Статус
-condition_is_empty	input, global (bool), negated, child	Пусто/не существует. global = 1 — глобальный флаг	Официальный
-condition_is_equal	source, destination (int или string), negated, child	Равенство	Официальный
-condition_is_greater_equal	source, destination, negated, child	≥	Официальный
-condition_is_less_equal	source, destination, negated, child	≤	Официальный
-condition_is_inv_slot_empty	slot (enum), negated, child	Слот пуст	Официальный
-condition_is_weapon_equipped	weapon, negated, child	Активное оружие с этим classname	Официальный
-condition_out_of_ammo	negated, child	Нет патронов	Официальный
-condition_owns_item	item, items_one_of[], negated, child	Есть предмет	Официальный
-condition_is_at_bomb_site	negated, child	На бомбсайте	Официальный
-condition_distance_less	input, distance_threshold_min, distance_threshold_max, negated, child	Дистанция меньше порога	Не используется в основных деревьях
-condition_has_parachute	negated, child	Есть парашют	Не используется (но встречается в Guardian)
-condition_inactive	input[], round_start_threshold_seconds, sensor_inactivity_threshold_seconds, negated, child	Нет активности	Не используется в основных деревьях, но встречается в Guardian
-condition_is_airborne	negated, child	В воздухе	Не используется в основных деревьях, но встречается в Guardian
-condition_is_greater	source, destination, negated, child	>	Не используется
-condition_is_less	source, destination, negated, child	<	Не используется
-condition_is_reloading	negated, child	Перезарядка	Не используется
-condition_is_weapon_suitable	input, weapon, negated, child	Подходит ли оружие для дистанции	Не используется
-condition_barrier	input_domain, input_name, radius, negated, child	—	Не используется
-Действия
-Узел	Ключи	Назначение	Статус
-action_acquire_items	items[], remove_all_items	Выдать предметы	Официальный
-action_aim	input, ready (string)	Повернуть к точке. Никогда не разскопится со снайперки до смены оружия	Официальный
-action_attack	input, ready, output	Стрелять по input, когда ready истинно	Официальный
-action_buy	—	Случайная покупка	Официальный
-action_choose_bomb_site_area	input (number), output	Позиция бомбсайта по индексу	Официальный
-action_choose_random_waypoint	input, output	Случайный тайл навмеша	Официальный
-action_choose_team_spawn_area	output, team (enum)	Navzone со спавнами	Официальный
-action_combat_positioning	input, is_attacking (string)	Уклонение/сближение	Официальный
-action_equip_item	item, items_one_of[]	Выбрать предмет	Официальный
-action_equip_weapon	weapon (classname или BEST)	Выбрать оружие	Официальный
-action_flee_area_damage	input, output, max_search_range, threat_min_keep_distance	Безопасная точка от урона по площади	Официальный
-action_look_at	input_angles или input_location	Повернуть бота. Указывать одно из двух	Официальный
-action_move_to	destination, hiding_spot, threat, auto_look_adjust, damaging_areas_penalty_cost, arrival_epsilon, additional_arrival_epsilon_2d, hiding_spot_check_distance_threshold, nearest_area_distance_threshold, movement_type, route_type	Двигаться к точке	Официальный
-action_pull_trigger	—	Нажать ЛКМ	Официальный
-action_use	—	Нажать +use	Официальный
-action_wait	wait_time_min, wait_time_max, wait_modulo_tick_mod, wait_modulo_tick_add	Заморозить ИИ	Официальный
-action_set_global_flag	name, expiration_time_min, expiration_time_max	Глобальный флаг на случайное время	Официальный
-action_aim_projectile	input, output	Рассчитать углы броска	Не используется (баг: не учитывает траекторию)
-action_choose_guardian_bomb_plant_location	output	Guardian: позиция закладки	Не используется в основных деревьях, но используется в Guardian
-action_choose_random_waypoint_within_radius	origin, radius, output	Случайная точка в радиусе	Не используется в основных деревьях, но используется в Co-op
-action_commit_suicide	—	Самоубийство	Не используется в основных деревьях, но используется в Guardian
-action_compare_global_counter	input_name, input_value	Сравнить счётчик	Не используется в основных деревьях, но используется в Guardian
-action_coordinated_buy	id_no_purchase, purchases[], team_filter, save_threshold	Скоординированная покупка	Не используется (баг: один бот заставляет всех)
-action_crouch	—	Присесть	Не используется в основных деревьях, но используется в Guardian
-action_custom_buy	item_aliases[]	—	Не используется
-action_drop_active_weapon	—	—	Не используется
-action_hide	output, max_range	Случайное укрытие	Не используется
-action_inspect_current_weapon	—	—	Не используется
-action_jump	—	Прыжок	Не используется в основных деревьях, но используется в Co-op
-action_parachute_positioning	—	Движение по диагонали	Не используется в основных деревьях, но используется в Guardian
-action_reload	—	Перезарядка	Не используется
-action_say	phrase, high_priority	Радио-команда	Не используется в основных деревьях, но используется в Co-op
-action_secondary_attack	—	—	Не используется
-action_select_areas_within_radius	input, radius, output	Navzone в радиусе	Не используется в основных деревьях, но используется в Guardian
-action_set_global_counter	input_name, input_value	Установить счётчик	Не используется в основных деревьях, но используется в Guardian
-action_set_value_float	key, value	Записать float	Не используется в основных деревьях, но используется в Guardian
-action_set_value_vector	key, value	Записать позицию	Не используется в основных деревьях, но используется в Guardian
-action_standup	—	Встать	Не используется
-action_teleport	destination	Телепорт	Не используется
-action_entity_accept_input	name, input	Отправить input энтити (встречается в Guardian)	Не документирован в вики, но используется
-Примечание: Source2 Wiki отмечает 36 узлов, которые существуют, но не используются в официальных деревьях (Deathmatch/Arms Race/Rush/Practice). Однако в деревьях Guardian и Co-op некоторые из них применяются. Поэтому статус «не используется» не означает, что узел не работает.
-
-Модель выполнения
-Дерево вычисляется каждый тик (~64 раза/сек) в два прохода:
-
-Check-pass — сверху вниз. Решает, какие ветки имеют право выполняться. Если корень не проходит — тик «пустой».
-
-Run-pass — выполняет выбранные ветки. Здесь двигаются, целятся, стреляют.
-
-Поскольку check-pass повторяется каждый тик:
-
-Условия перепроверяются постоянно.
-
-selector может прервать текущую ветку, если более приоритетная начала проходить проверку.
-
-Поведение композитов
-sequencer — check-pass смотрит только текущего ребёнка; run-pass по порядку до провала. Условия позади не перепроверяются.
-
-selector — check-pass с первого ребёнка каждый тик; запускает первого прошедшего; останавливает текущего при появлении более приоритетного.
-
-parallel — все дети каждый тик; провал любого = стоп всех; успех = все (или первый при succeed_after_first = 1).
-
-decorator_repeat — перезапускает ребёнка каждый раз, когда он завершается; с amount = N останавливается после N запусков и возвращает результат последнего.
-
-decorator_succeed — всегда проходит check-pass; после ребёнка возвращает success (или failure при negated=1).
-
-decorator_invert — инвертирует check-результат ребёнка; во время работы результаты ребёнка проходят без изменений.
-
-condition_* — проверяется в каждом check-pass; пока условие истинно, выполняет ребёнка (или просто успех, если ребёнка нет); при провале — провал ветки. Все условия поддерживают negated = 1.
-
-Пример разворачивания дерева
-text
-sequencer[ move_to(bot_target), look_at(bot_target), wait(2..3) ] в repeat
-Тик 1: sequencer запускает move_to, тот двигает на 1 тик → running.
-
-Тики 2..N: игра идёт прямо в move_to — это одно непрерывное движение, а не новое решение.
-
-Прибытие: move_to success → look_at → success.
-
-wait выбирает время окончания и возвращает running.
-
-Все три готовы → sequencer success → repeat заново.
-
-Ключевой вывод: узлы не двигают бота напрямую. action_move_to управляет встроенным pathfinding; action_use/action_reload «нажимают кнопку» на тик; action_aim/action_attack рулят встроенным aiming/shooting, пока не завершатся.
-
-Значения и Blackboard
-Большинство значений в дереве — это ключи blackboard (хранилище бота), которые узлы читают и пишут. Например, сенсор пишет врагов в output = "Enemy", а действие атаки читает их через input = "Enemy".
-
-Строки
-Литерал в одинарных кавычках: 'CT' — кавычки отбрасываются.
-
-Иначе — имя ключа blackboard, который должен содержать строку.
-
-Числа
-Литеральное число.
-
-ConVar: @mp_plant_c4_anywhere.
-
-Ключ blackboard. Если ключ содержит строку, она разрешается ещё раз, но только на 1 уровень.
-
-Позиции и имена сущностей
-Ключи, ожидающие позицию (destination, input_location), принимают:
-
-Литерал: "-1450 2230 2".
-
-Ключ blackboard (позиция, строка или список sensed-сущностей — берётся первая).
-
-Targetname энтити на карте, если ни один ключ так не называется. Используется origin энтити.
-
-Это позволяет управлять ботами с карты: Rush-боты идут к ant.button по имени; скрипт может двигать target-энтити, чтобы перенаправлять ботов.
-
-Домены (Domains)
-Домены — способ делить состояние между ботами. Читаются по-разному в разных узлах, поэтому официальные деревья — лучший справочник.
-
-Домен	Где встречается	Назначение
-AllBots	memory_to_expire, input_domain, output_domain	Общая память всех ботов
-'StratTokens'	decorator_token_service	Токены стратегий (Practice, Guardian)
-'PressAntennaButton'	decorator_try_lock	Блокировка нажатия кнопки (Rush)
-'DefuseBombIfNearby'	decorator_try_lock	Блокировка разминирования (Practice)
-Важно: кавычки вокруг имён доменов обязательны — это литералы.
-
-Память
-decorator_sensor → output = "Vision" (список сущностей).
-
-decorator_picker_* → сужают "Vision".
-
-decorator_memory → копирует в "ShortTermAttackMemory".
-
-decorator_bot_service в корне → истекает память: {key, time, distance}.
-
-Стандартные имена памяти в официальных деревьях:
-
-ShortTermAttackMemory (0.7 с, 0 дистанция)
-
-LongTermMemory (10 с, 500)
-
-ShortTermInvestigateMemory (3 с, 200)
-
-ShortTermDamageMemory (Practice, Guardian)
-
-ShortTermAreaDamageMemory (Practice, Guardian)
-
-DamageThroughSmokeMemory (Practice, Guardian)
-
-Threats (Practice, Guardian, домен AllBots)
-
-Глобальные флаги и счётчики
-action_set_global_flag устанавливает именованный флаг на случайное время между expiration_time_min и expiration_time_max. Официальные деревья проверяют его через condition_is_empty с global = 1.
-
-action_set_global_counter, decorator_dec_global_counter, action_compare_global_counter — именованные счётчики.
-
-Параметры subtree
-subtree может записывать значения в blackboard до старта:
-
-kv3
-{
-    type = "subtree"
-    file = "scripts/ai/mymode/bt_goto.kv3"
-    name = "GotoA"
-    params =
-    [
-        { key = "Target" value = "site_a_target" },
-        { key = "WaitTime" value = 3 }
-    ]
-}
-Значения должны быть целыми или строками. Дробные и булевы отвергаются с ошибкой [AI BT]: unsupported type for subtree parameter.
-
-Отладка
-Команда	Назначение	Требования
-mp_bot_ai_bt "путь"	Назначить дерево всем ботам	—
-mp_bot_ai_bt_clear_cache	Сбросить кэш после правок	—
-cv_bot_ai_bt_debug_target <index>	Нарисовать дерево бота	sv_cheats 1, локальный/приватный сервер
-cv_bot_ai_bt_hiding_spot_show	Показать укрытия	sv_cheats 1
-cv_bot_ai_bt_moveto_show_next_hiding_spot	Показать следующее проверяемое укрытие	sv_cheats 1
-Что искать в консоли:
-
-[AI BT]: Loaded behavior tree '<file>' — при developer 1.
-
-[AI BT] warnings — всегда, даже без developer.
-
-Blackboard entry 'X' does not exist nor it is a valid entity name — ключ не найден.
-
-[AI BT]: Config node 'attack' must contain 13 entries — неверное число строк.
-
-[AI BT]: unsupported type for subtree parameter — float/bool в params.
-
-Зарезервированные переменные
-Это переменные, которые игра сама кладёт в blackboard. Вы можете их читать, но не можете создавать.
-
-Переменная	Тип	Откуда берётся	Где используется
-NumberOfTerrorists	int	Движок	condition_is_equal в bt_plant_bomb_if_owned
-NumberOfAliveTerrorists	int	Движок	condition_is_equal в bt_plant_bomb_if_owned
-NumberOfCounterTerrorists	int	Движок	—
-NumberOfAliveCounterTerrorists	int	Движок	—
-AccountBalance	int	Движок	—
-AmmoCount/<weapon>	int	Движок	—
-AmmoCount/current	int	Движок	—
-TeamName	string	Движок	condition_is_equal source="TeamName" destination="'T'" в Practice
-RoundNumber	int	Движок	Все bt_t_*.kv3 и bt_ct_*.kv3 в Practice
-BlindnessPercentage	float	Движок	—
-GuardianWaveNumber	int	Движок (Guardian)	—
-LastCoopSpawnPointName	string	Движок (Co-op)	—
-LastCoopSpawnPointLocation	Vector	Движок (Co-op)	—
-Примечание: TeamName и RoundNumber отсутствуют в списке зарезервированных переменных на Source2 Wiki, но активно используются в официальном Practice-дереве. Это означает, что список на вики неполный, и они доступны как минимум в режиме обучения (вероятно, и в других).
-
-Различия между CS:GO и CS2
-Аспект	CS:GO	CS2
-Уровни скилла	8 (без elite)	9 (с elite)
-Строк в attack	16 (включая WEAPONTYPE_ZONE_REPULSOR)	13 (ровно, иначе ошибка)
-aim_ready_angle_tolerance	Не документирован	Есть в конфиге
-TeamName / RoundNumber	Не документированы	Используются в Practice
-Документация узлов	Неточная, много TODO	Точный список читаемых ключей
-Неиспользуемые узлы	Не отмечены	36 отмечены (но некоторые используются в Guardian/Co-op)
-Игнорируемые параметры	Не отмечены	acquire_only, ratio, distance_threshold
-Модель выполнения	Не описана	Два прохода, детально
-Subtree params	Не описаны	Только int/string
-decorator_picker_*	Без доменов	С input_domain/output_domain
-decorator_sensor	Без append_items	С append_items
-action_wait	2 ключа	+ wait_modulo_tick_mod/add
-Баг с гранатами (ENEMY)	Есть	Не упоминается
-Примеры деревьев
-Простое дерево (движение, взгляд, ожидание)
-kv3
-{
-    config = "scripts/ai/deathmatch/bt_config.kv3"
-    root =
-    {
-        type = "decorator_repeat"
-        child =
-        {
-            type = "sequencer"
-            children =
-            [
-                { type = "action_move_to" destination = "bot_target" movement_type = "BT_ACTION_MOVETO_RUN" route_type = "BT_ACTION_MOVETO_FASTEST_ROUTE" }
-                { type = "action_look_at" input_location = "bot_target" }
-                { type = "action_wait" wait_time_min = 2 wait_time_max = 3 }
-            ]
-        }
-    }
-}
-Паттерны, проверенные официальными деревьями
-1. Восприятие + решение через parallel:
-
-text
-parallel
-├── repeat → parallel (sensors, memory)
-└── repeat → selector (priority list)
-2. Selector как список приоритетов:
-
-text
-selector
-├── condition_is_empty ShouldBuy (negated) → sequencer[wait, buy, remove_key]
-├── sensor DAMAGE → aim
-├── subtree Attack
-├── subtree HealIfNeeded
-└── subtree Hunt
-3. Блокировка действия одним ботом:
-
-text
-decorator_try_lock domain = "'PressAntennaButton'"
-└── sequencer[ move_to ant.button, look_at, wait, use ]
-4. Скоординированная покупка (не используйте action_coordinated_buy — он сломан):
-
-text
-decorator_run_once domain = "'BuyPhase'"
-└── action_buy
-5. Истечение памяти в корне:
-
-text
-decorator_bot_service
-  memory_to_expire =
-  [
-    { key = "ShortTermAttackMemory"  time = 0.7  distance = 0 }
-    { key = "LongTermMemory"         time = 10   distance = 500 }
-    { key = "ShortTermInvestigateMemory" time = 3 distance = 200 }
-  ]
-Официальные деревья и модули (из предоставленных файлов)
-Deathmatch / DM Freeforall: scripts/ai/deathmatch/bt_default.kv3
-
-Корень: decorator_bot_service → decorator_buy_service → parallel (восприятие + selector).
-
-Selector: покупка, реакция на урон, атака, лечение, исследование, охота.
-
-Arms Race: scripts/ai/armsrace/bt_default.kv3 (аналогично, но с другими модулями).
-
-Rush: scripts/ai/rush/bt_default.kv3
-
-Дополнительно: decorator_try_lock на 'PressAntennaButton', движение к ant.button, использование.
-
-Practice (New User Training): scripts/ai/practice/newplayer_dust2_01.kv3
-
-decorator_hiding_spot_service → decorator_token_service ('StratTokens') → decorator_bot_service.
-
-В selector: ItemStrategy, Attack, FaceDamageInflictor, AttackDamageInflictorSmoke, ClearThreatsWithinFov, SelectNearbyThreat, TakeoverStrategy, проверки TeamName для закладки/разминирования, исследование, охота.
-
-Co-op (Guard, Roam, Rush, Sniper): scripts/ai/coop/bt_guard.kv3 и др.
-
-decorator_hiding_spot_service → decorator_bot_service (с basic_chatter_enable, input_chatter_enemies).
-
-BasicPlayerMemorization, BasicPlayerEngagement, исследование, спецповедение (охрана точки, рой, снайпер).
-
-Guardian (пример op11_sirocco_2.kv3):
-
-decorator_hiding_spot_service → decorator_token_service ('StratTokens' с токенами стратегий) → decorator_bot_service.
-
-Selector: condition_inactive (самоубийство при неактивности), ItemStrategy, Attack, FaceDamageInflictor, AttackDamageInflictorSmoke, ClearThreatsWithinFov, SelectNearbyThreat, TakeoverStrategy, PlantIfCovered, PlantIfOwned, PickupBombIfNearby, HealIfNeeded, исследование, охота.
-
-Модули: bt_item_strategy, bt_takeover_strategy, bt_attack_with_shield, bt_investigate_with_shield, bt_memorize_threats, bt_clear_threats_within_fov, bt_select_nearby_threat и др.
-
-Модули (общие):
-
-bt_attack.kv3 — выбор цели, экипировка, позиционирование, прицеливание, атака.
-
-bt_memorize_enemies_vision.kv3 — сенсор зрения (FOV, PLAYERS, ENEMY, nearby 1500, visible, реакция, память).
-
-bt_memorize_noises.kv3 — сенсор слуха (сфера 3000, NOISE, weight_as_distance, random_by_distance, dedup, реакция, память).
-
-bt_memorize_damage.kv3 — сенсор DAMAGE → ShortTermDamageMemory и DamageThroughSmokeMemory.
-
-bt_memorize_area_damage_*.kv3 — гранаты, инферно, текущий урон.
-
-bt_memorize_nearest_investigation.kv3 — выбирает ближайшее событие из LongTermMemory в ShortTermInvestigateMemory.
-
-bt_investigate_closest_memorized_event.kv3 — идёт к событию, смотрит, ждёт.
-
-bt_heal_if_needed.kv3 — лечение при HP < 60.
-
-bt_face_damage_inflictor.kv3 — поворот к источнику урона, атака (если не в дыму).
-
-bt_attack_damage_inflictor_smoke.kv3 — атака источника урона сквозь дым.
-
-bt_flee_area_damage_threats.kv3 — бегство из зоны урона.
-
-bt_look_around.kv3 — случайный обзор.
-
-bt_plant_bomb_if_covered.kv3 — закладка при прикрытии.
-
-bt_plant_bomb_if_owned.kv3 — закладка, если есть бомба (с флагом DontPlantBomb).
-
-bt_pickup_bomb_if_nearby.kv3 — подбор бомбы.
-
-bt_defuse_bomb_if_nearby.kv3 — разминирование.
-
-bt_pickup_hostage.kv3, bt_pickup_hostage_if_covered.kv3 — захват заложника.
-
-bt_clear_threats_within_fov.kv3 — удаление угроз из общего списка, если они в FOV.
-
-bt_select_nearby_threat.kv3 — выбор ближайшей видимой угрозы в NearestThreatMemory.
-
-bt_memorize_threats.kv3 — добавление источников урона в глобальный Threats.
-
-bt_determine_rush_center.kv3 — определение центра раша по имени спавна (Co-op).
-
-bt_throw_utility_if_covered.kv3 — бросок гранаты при прикрытии.
-
-bt_basic_player_memorization.kv3, bt_basic_player_engagement.kv3 — базовые модули Co-op.
-
-Практические рекомендации
-С чего начать
-Извлеките официальные деревья через Source2 Viewer из pak01_dir.vpk. Изучите bt_default.kv3 (Deathmatch) и bt_practice/newplayer_dust2_01.kv3 — это лучшие образцы.
-
-Не пытайтесь «портировать» C++ логику из слива. Думайте в терминах узлов, blackboard и приоритетов.
-
-Начните с простого дерева и итеративно усложняйте.
-
-Шаблон минимального дерева
-kv3
-<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
-{
-    config = "scripts/ai/deathmatch/bt_config.kv3"
-    root =
-    {
-        type = "decorator_repeat"
-        child =
-        {
-            type = "sequencer"
-            children =
-            [
-                { type = "action_move_to"  destination = "bot_target"  movement_type = "BT_ACTION_MOVETO_RUN"  route_type = "BT_ACTION_MOVETO_FASTEST_ROUTE" }
-                { type = "action_look_at"  input_location = "bot_target" }
-                { type = "action_wait"     wait_time_min = 2  wait_time_max = 3 }
-            ]
-        }
-    }
-}
-Чего избегать
-❌ Не делайте	✅ Делайте вместо этого
-Полагаться на acquire_only, ratio, distance_threshold у picker_blocked_by_smoke	Используйте узлы без этих параметров — они игнорируются
-Использовать action_coordinated_buy	decorator_run_once + action_buy
-Забывать mp_bot_ai_bt_clear_cache	Всегда чистить кэш после правок
-Передавать float/bool в subtree params	Только int или string
-Использовать 16 строк в attack (CS2)	Ровно 13, в фиксированном порядке
-Ожидать, что action_aim разскопится	Смените оружие или экипируйте то же заново
-Полагаться на condition_is_greater/is_less	Используйте greater_equal/less_equal — они используются в официальных деревьях
-Проверка гипотез о «мёртвых» параметрах
-Если хотите проверить, действительно ли acquire_only не работает:
-
-Создайте два дерева: с acquire_only = 1 и без.
-
-Запустите cv_bot_ai_bt_debug_target на боте.
-
-Сравните поведение прицеливания. Если разницы нет — параметр мёртв.
-
-Сводная таблица различий: слитый C++ код vs CS2 KV3
-Концепт в C++ (слив)	Аналог в CS2 KV3	Можно ли перенести?
-Action<Actor>::OnStart	OnStart узла (неявно)	❌ Нет прямого аналога
-ActionResult (CONTINUE/CHANGE_TO/SUSPEND_FOR/DONE)	success/failure/running	⚠️ Концептуально похоже, но API другой
-Behavior<Actor>	root + дерево	❌
-INextBotComponent::Update	Тик дерева	❌
-IVision::IsAbleToSee	decorator_picker_visible	⚠️ Только концептуально
-CKnownEntity	decorator_memory + ключ blackboard	❌
-GetPrimaryKnownThreat	selector + decorator_ranker_dist + picker_max_score	⚠️ Логику можно воспроизвести, код — нет
-PathFollower	action_move_to	❌
-ILocomotion::Approach	action_move_to	❌
-Главный вывод: слитый C++ код — это музейная ценность для понимания эволюции ИИ Valve, но не рабочий инструмент для CS2. Ваш рабочий инструмент — KV3-файлы, Source2 Wiki и официальные деревья из вашего архива.
-
-Источники
-Source2 Wiki: Bot behavior trees
-
-Valve Developer Community: CS:GO Bot Behavior Trees
-
-Предоставленные KV3-файлы: bt_config.kv3, bt_default.kv3 (deathmatch, armsrace, rush, practice, coop, guardian), модули (bt_attack.kv3, bt_memorize_*.kv3, bt_plant_bomb_*.kv3 и др.).
-
-Слитый C++ код NextBot (использован только для сравнения, исключён из практических рекомендаций).
-
-Этот ответ сгенерирован AI, только для справки.
-Блять, ты можешь написать все красиво? Ебаный ты карась. Зачем ты пишешь про слитый C++, если он здесь не нужне. ПРОЙДИСЬ ПО ВСЕМ ИСХОДНЫМ ФАЙЛАМ и составь понятную википедию (можешь ее переделать). Добавь, если надо, каких-то уточнений, пояснений. Сделай так, чтобы было понятно. Сделай так, чтобы по этой википедии можно было написать свой скрипт ботов блять.
-
-СДЕЛАЛ ДАВАЙ БЫСТРО. Удали мусорную иннформацию если нужно (или переделай понятно) и пришли красивый понятный вики блять
-Пользователь хочет получить единую, понятную вики по ботам CS2/CS:GO на Behavior Trees, основанную на всех загруженных файлах. Нужно убрать упоминания слитого C++ кода, убрать мусор, сделать структурированно и практично, чтобы можно было написать свой скрипт. Нужно пройтись по всем исходным файлам: bt_config (CS:GO и CS2), bt_default (deathmatch, armsrace, rush, practice, coop, guardian), модули, а также вики Source2 и CS:GO. Объединить, уточнить, сделать понятным.
-
-Основные разделы:
-
-Введение: что такое BT в CS2, как работает, где лежат файлы.
-
-Быстрый старт: как создать своё дерево, команды.
-
-Формат KV3: синтаксис, структура файла.
-
-Конфиг (bt_config.kv3): уровни скилла, параметры, таблица attack (13 строк в CS2, 16 в CS:GO).
-
-Узлы: полный справочник с ключами, типами, описанием, статусом (официальный/не используется). Разделить на композиты, декораторы, условия, действия.
-
-Модель выполнения: два прохода, поведение композитов, пример.
-
-Значения и Blackboard: строки, числа, позиции, домены, память, глобальные флаги, subtree params.
-
-Зарезервированные переменные.
-
-Отладка.
-
-Различия CS:GO vs CS2.
-
-Примеры деревьев и модулей (из предоставленных файлов).
-
-Практические рекомендации и типичные ошибки.
-
-Нужно убрать всё про C++ (слитый код), убрать дублирование, сделать таблицы читаемыми. Уточнить, что в CS2 13 строк attack, в CS:GO 16 (но в предоставленном CS:GO конфиге 20 строк? Перепроверить: в файле bt_config.txt (CS:GO) строки: KNIFE, PISTOL, SUBMACHINEGUN, RIFLE, SHOTGUN, SNIPER_RIFLE, MACHINEGUN, C4, TASER, GRENADE, EQUIPMENT, STACKABLEITEM, FISTS, BREACHCHARGE, BUMPMINE, TABLET, MELEE, SHIELD, WEAPONTYPE_ZONE_REPULSOR, UNKNOWN — это 20. В вики CS:GO сказано 16 строк. Возможно, в вики ошибка или в файле лишние. Но в CS2 ровно 13: KNIFE, PISTOL, SUBMACHINEGUN, RIFLE, SHOTGUN, SNIPER_RIFLE, MACHINEGUN, C4, TASER, GRENADE, EQUIPMENT, STACKABLEITEM, UNKNOWN. В предоставленных CS2 конфигах именно 13 строк. В CS:GO конфиге из файла — 20 строк. В вики CS:GO указано 16 строк, но перечислены: KNIFE, PISTOL, SUBMACHINEGUN, RIFLE, SHOTGUN, SNIPER_RIFLE, MACHINEGUN, C4, TASER, GRENADE, EQUIPMENT, STACKABLEITEM, FISTS, BREACHCHARGE, BUMPMINE, TABLET, MELEE, SHIELD, WEAPONTYPE_ZONE_REPULSOR, UNKNOWN — это 20. Значит, в вики CS:GO, вероятно, ошибка (16 строк — это старые данные). В CS2 точно 13. Укажем: CS:GO — 16 строк в старых версиях, но в современных (и в предоставленном файле) может быть больше; CS2 — строго 13.
-
-Нужно сделать вики самодостаточной: включить все узлы, которые есть в файлах, с пометками, где используются. Убрать C++.
-
-Сделаю структурированный документ с заголовками, таблицами, примерами. Без лишней воды. Пользователь торопится, поэтому нужно быстро и чётко.
-
-План ответа:
-
-Заголовок.
-
-Введение (что такое BT, где лежат, как включить).
-
-Быстрый старт (3 шага).
-
-Формат KV3 (синтаксис, пример).
-
-Конфиг (уровни, параметры, attack table).
-
-Узлы (полный справочник с таблицами).
-
-Модель выполнения (два прохода, пример).
-
-Значения и Blackboard.
-
-Зарезервированные переменные.
-
-Отладка.
-
-Различия CS:GO/CS2.
-
-Примеры (минимальное дерево, паттерны, официальные модули).
-
-Рекомендации и ошибки.
-
-Убрать всё про C++. Уточнить, что в CS2 13 строк attack, в CS:GO 16 (но в файле 20 — возможно, кастом). Сделать акцент на CS2, так как пользователь спрашивает про CS2. Но упомянуть CS:GO для контекста.
-
-Сделаю таблицы с ключами и описанием. Для узлов укажу, какие ключи обязательны, какие опциональны. Где возможно, дам примеры.
-
-Проверю все файлы: bt_config (CS2 и CS:GO), bt_default (deathmatch, armsrace, rush, practice, coop, guardian), модули (bt_attack, bt_memorize_, bt_plant_bomb_, bt_pickup_, bt_defuse_, bt_heal_if_needed, bt_flee_area_damage_threats, bt_look_around, bt_face_damage_inflictor, bt_attack_damage_inflictor_smoke, bt_clear_threats_within_fov, bt_select_nearby_threat, bt_memorize_threats, bt_determine_rush_center, bt_throw_utility_if_covered, bt_basic_player_memorization, bt_basic_player_engagement, bt_pickup_hostage, bt_pickup_hostage_if_covered, bt_plant_bomb_if_covered, bt_plant_bomb_if_owned). Также новые узлы из Guardian: action_entity_accept_input, condition_has_parachute, condition_is_airborne, condition_inactive, action_commit_suicide, action_compare_global_counter, action_coordinated_buy, action_crouch, action_jump, action_parachute_positioning, action_select_areas_within_radius, action_set_global_counter, action_set_value_float, action_set_value_vector. Их тоже включить с пометкой "используется в Guardian/Co-op".
-
-Убрать дублирование. Сделать единый справочник.
-
-Начну писать.
-
-Behavior Trees ботов CS2 и CS:GO — полная вики
 Содержание
 Что такое Behavior Tree
 
@@ -714,52 +7,63 @@ Behavior Trees ботов CS2 и CS:GO — полная вики
 
 Формат KV3
 
-Конфиг бота (bt_config.kv3)
+Конфиг бота
 
-Узлы (Nodes)
+Композиты
+
+Декораторы
+
+Условия
+
+Действия
 
 Модель выполнения
 
-Значения и Blackboard
+Blackboard, домены, память
 
 Зарезервированные переменные
 
 Отладка
 
-Различия CS:GO и CS2
+CS:GO vs CS2
 
-Примеры и паттерны
+Готовые модули
 
-Практические рекомендации
+Паттерны
+
+Подводные камни
 
 1. Что такое Behavior Tree
-Behavior Tree (BT) — это KV3-файл, описывающий поведение бота как дерево узлов, которое игра вычисляет каждый тик (~64 раза в секунду). Дерево используется в режимах Deathmatch, Arms Race, Rush, New User Training (Practice), Guardian и Co-op.
+Behavior Tree (BT) — KV3-файл, описывающий поведение бота как дерево узлов. Игра обходит дерево каждый тик (~64 раза/сек): проверяет условия, выполняет действия. Бот не «думает» — он следует дереву.
 
-Файлы лежат в game/csgo/pak01_dir.vpk (извлекаются через Source2 Viewer) по путям scripts/ai/....
+Где лежат файлы:
 
-Включение: ConVar mp_bot_ai_bt задаёт путь к дереву. Если пуст — классический ИИ.
+Деревья и модули: scripts/ai/... внутри game/csgo/pak01_dir.vpk (извлекаются Source2 Viewer).
 
-После правок: mp_bot_ai_bt_clear_cache, затем переспавн ботов (перезапуск раунда).
+Своё дерево: scripts/ai/mymode/bt_default.kv3.
 
-Своё дерево: положите .kv3 в scripts/ai/ (например, scripts/ai/mymode/bt_default.kv3) и укажите в mp_bot_ai_bt.
+Конфиг: scripts/ai/<mode>/bt_config.kv3.
 
-Официальные режимы задают деревья в конфигах:
+Как включить:
 
-Режим	Путь
-Deathmatch / DM Freeforall	scripts/ai/deathmatch/bt_default.kv3
-Arms Race	scripts/ai/armsrace/bt_default.kv3
-Rush	scripts/ai/rush/bt_default.kv3
-New User Training	scripts/ai/practice/newplayer_dust2_01.kv3
+text
+mp_bot_ai_bt "scripts/ai/mymode/bt_default.kv3"
+mp_bot_ai_bt_clear_cache
+Затем перезапуск раунда (mp_restartgame 1 или endround), чтобы боты переспавнились. С developer 1 боты при спавне пишут [AI BT]: Loaded behavior tree '<file>'. Ошибки — всегда с префиксом [AI BT].
+
+Официальные режимы:
+
+Режим	Дерево	Конфиг
+Deathmatch / DM Freeforall	scripts/ai/deathmatch/bt_default.kv3	13 строк
+Arms Race	scripts/ai/armsrace/bt_default.kv3	13 строк
+Rush	scripts/ai/rush/bt_default.kv3	13 строк
+New User Training	scripts/ai/practice/newplayer_dust2_01.kv3	13 строк
+Co-op (Guard/Roam/Rush/Sniper)	scripts/ai/coop/bt_*.kv3	20 строк
+Guardian	scripts/ai/guardian/bt_op*.kv3	20 строк
+Про 13 и 20 строк: в предоставленных файлах конфиги Deathmatch/Rush/Practice имеют 13 строк в таблице attack, конфиги Co-op/Guardian — 20 строк. Source2 Wiki утверждает, что CS2 требует ровно 13 строк, иначе ошибка [AI BT]: Config node 'attack' must contain 13 entries. Вероятно, Guardian/Co-op используют другой путь загрузки или это CS:GO-совместимые конфиги. Для своих деревьев в Deathmatch-стиле используйте 13 строк.
+
 2. Быстрый старт
-Создайте файл scripts/ai/mymode/bt_default.kv3.
-
-Вставьте минимальное дерево (см. ниже) и настройте config на нужный конфиг.
-
-В консоли сервера: mp_bot_ai_bt "scripts/ai/mymode/bt_default.kv3", затем mp_bot_ai_bt_clear_cache и перезапустите раунд.
-
-С developer 1 боты при спавне пишут [AI BT]: Loaded behavior tree '<file>'. Ошибки пишутся всегда с префиксом [AI BT].
-
-Минимальное дерево:
+Создайте scripts/ai/mymode/bt_default.kv3:
 
 kv3
 <!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
@@ -780,14 +84,34 @@ kv3
         }
     }
 }
-Это дерево заставляет бота бежать к энтити bot_target, смотреть на неё и ждать 2–3 секунды, повторяя цикл.
+Что делает это дерево:
+
+decorator_repeat — бесконечный цикл.
+
+sequencer — выполняет детей по порядку.
+
+action_move_to — бот бежит к энтити bot_target (пока не прибудет).
+
+action_look_at — смотрит на bot_target.
+
+action_wait — ждёт 2–3 секунды.
+
+Цикл повторяется.
+
+Как проверить:
+
+text
+mp_bot_ai_bt "scripts/ai/mymode/bt_default.kv3"
+mp_bot_ai_bt_clear_cache
+mp_restartgame 1
+Поставьте на карту энтити с targetname bot_target (например, info_target). Бот будет бежать к ней.
 
 3. Формат KV3
-Каждый файл начинается с заголовка:
+Каждый файл начинается с обязательного заголовка:
 
 text
 <!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
-Далее — объект:
+Далее — объект с двумя ключами:
 
 config — путь к конфигу (обязателен для корневого дерева).
 
@@ -797,61 +121,78 @@ root — корневой узел (обязателен).
 
 Синтаксис:
 
-Комментарии //.
+Элемент	Пример	Примечание
+Комментарии	// текст	Однострочные
+Ключи	type, input, destination	Регистронезависимы (Name = name)
+Строки-литералы	'CT'	В одинарных кавычках; кавычки отбрасываются
+Строки в двойных кавычках	"scripts/ai/..."	Одинарные внутри сохраняются как часть строки: domain = "'PressAntennaButton'" → значение 'PressAntennaButton'
+Числа	3, 0.5	—
+Массивы	[ ... ]	—
+Объекты	{ ... }	—
+Subtree-файл — это просто один узел:
 
-Имена ключей регистронезависимы.
+kv3
+<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
+{
+    type = "decorator_picker_reaction_time"
+    input = "ShortTermAttackMemory"
+    output = "Enemy"
+    child = { ... }
+}
+4. Конфиг бота
+Конфиг задаёт параметры действий: скорость прицеливания, реакцию, стрельбу. Он не управляет логикой — только «мышечной памятью».
 
-Строки-литералы в одинарных кавычках: 'CT'.
+Уровни скилла:
 
-Числа, массивы [ ... ], вложенные объекты { ... }.
-
-4. Конфиг бота (bt_config.kv3)
-Конфиг задаёт «мышечную память»: скорость прицеливания, реакцию, стрельбу. Уровни скилла:
-
-CS:GO: default, low, fair, normal, tough, hard, very_hard, expert (8).
-
-CS2: добавлен elite (9).
-
-Каждый уровень наследует недостающие ключи из default.
+Версия	Уровни
+CS:GO	default, low, fair, normal, tough, hard, very_hard, expert (8)
+CS2	+ elite (9)
+Каждый уровень наследует недостающие ключи из default. В предоставленных файлах все 9 уровней.
 
 4.1 Параметры прицеливания
 Ключ	Тип	Описание
-aim_target_acquisition_lerp_time	float	Время «доезда» прицела до новой цели
-aim_target_acquisition_lerp_time_deviation	float	Разброс времени
-aim_target_acquisition_angle_penalty	float	Штраф за угол до цели
-aim_target_acquisition_angle_penalty_deviation	float	Разброс штрафа
-aim_target_acquisition_angle_penalty_reduction_ratio	float	Уменьшение штрафа со временем
-aim_target_acquisition_angle_tolerance	float	Допуск угла при захвате
-aim_target_acquisition_angle_lerp_bias	float	Сглаживание угла захвата
-aim_target_tracking_lerp_time	float	Скорость сопровождения
-aim_target_tracking_lerp_time_deviation	float	Разброс сопровождения
-aim_target_tracking_focus_interval	float	Интервал «фокуса» при трекинге
-aim_target_tracking_focus_interval_deviation	float	Разброс интервала
-aim_target_tracking_angle_lerp_bias	float	Сглаживание трекинга
-aim_ready_angle_tolerance	float	Угол, при котором action_attack считает прицел готовым (в CS:GO не документирован)
-aim_new_target_angle_tolerance	float	Угол для переключения на новую цель
-aim_max_duration	float	Максимальное время прицеливания
-aim_max_duration_deviation	float	Разброс макс. времени
-aim_punch_angle_reaction_chance	float	Шанс реакции на отдачу
-4.2 Осмотр
+aim_target_acquisition_lerp_time	float	Время «доезда» прицела до новой цели (сек). Больше = медленнее наводится.
+aim_target_acquisition_lerp_time_deviation	float	Случайный разброс времени.
+aim_target_acquisition_angle_penalty	float	Штраф за большой угол до цели. Больше = сильнее замедляется при большом угле.
+aim_target_acquisition_angle_penalty_deviation	float	Разброс штрафа.
+aim_target_acquisition_angle_penalty_reduction_ratio	float	Насколько штраф уменьшается со временем (0–1).
+aim_target_acquisition_angle_tolerance	float	Допуск угла при захвате. Меньше = точнее нужно навестись.
+aim_target_acquisition_angle_lerp_bias	float	Сглаживание угла захвата (0–1).
+aim_target_tracking_lerp_time	float	Скорость сопровождения цели (сек). Больше = медленнее следит.
+aim_target_tracking_lerp_time_deviation	float	Разброс сопровождения.
+aim_target_tracking_focus_interval	float	Интервал «фокуса» при трекинге (сек).
+aim_target_tracking_focus_interval_deviation	float	Разброс интервала.
+aim_target_tracking_angle_lerp_bias	float	Сглаживание трекинга.
+aim_ready_angle_tolerance	float	Угол, при котором action_attack считает прицел готовым (флаг ready). В CS:GO не документирован.
+aim_new_target_angle_tolerance	float	Угол для переключения на новую цель.
+aim_max_duration	float	Максимальное время прицеливания (сек).
+aim_max_duration_deviation	float	Разброс макс. времени.
+aim_punch_angle_reaction_chance	float	Шанс реакции на отдачу (0–1).
+4.2 Параметры осмотра
 Ключ	Описание
-look_around_awareness_yaw_range	Макс. угол по горизонтали
-look_around_awareness_pitch_range	Макс. угол по вертикали
-look_around_focus_interval	Пауза между поворотами
-look_around_focus_interval_deviation	Разброс паузы
-look_around_lerp_time	Время поворота
-look_around_lerp_time_deviation	Разброс времени
-look_around_lerp_bias	Сглаживание
+look_around_awareness_yaw_range	Макс. угол поворота по горизонтали (градусы).
+look_around_awareness_pitch_range	Макс. угол по вертикали.
+look_around_focus_interval	Пауза между поворотами камеры (сек).
+look_around_focus_interval_deviation	Разброс паузы.
+look_around_lerp_time	Время поворота камеры (сек).
+look_around_lerp_time_deviation	Разброс времени.
+look_around_lerp_bias	Сглаживание движения камеры.
 4.3 Реакция и бой
 Ключ	Описание
-reaction_time	Задержка реакции на событие (сек)
-combat_crouch_chance	Шанс присесть в бою (0–1)
-combat_dodge_command_duration	Длительность уклонения
-combat_dodge_command_duration_deviation	Разброс длительности
+reaction_time	Задержка перед реакцией на событие (сек).
+combat_crouch_chance	Шанс присесть в бою (0–1).
+combat_dodge_command_duration	Длительность команды уклонения (сек).
+combat_dodge_command_duration_deviation	Разброс длительности.
 4.4 Таблица attack
 Каждая строка — 5 чисел: burst duration, duration deviation, cadence, cooldown, cooldown deviation.
 
-CS2 — ровно 13 строк, фиксированный порядок:
+Поле	Что означает
+burst duration	Длительность одной очереди (сек).
+duration deviation	Разброс длительности.
+cadence	Пауза между выстрелами внутри очереди (0 = без паузы).
+cooldown	Пауза между очередями (сек).
+cooldown deviation	Разброс паузы.
+13 строк (Deathmatch/Rush/Practice):
 
 KNIFE
 
@@ -879,250 +220,22 @@ STACKABLEITEM
 
 UNKNOWN
 
-Если строк не 13 — конфиг отвергается с ошибкой [AI BT]: Config node 'attack' must contain 13 entries.
+20 строк (Co-op/Guardian): те же 13 + FISTS, BREACHCHARGE, BUMPMINE, TABLET, MELEE, SHIELD, WEAPONTYPE_ZONE_REPULSOR (порядок как в файлах: после STACKABLEITEM идут FISTS, BREACHCHARGE, BUMPMINE, TABLET, MELEE, SHIELD, WEAPONTYPE_ZONE_REPULSOR, UNKNOWN).
 
-CS:GO — в старых версиях 16 строк (включая WEAPONTYPE_ZONE_REPULSOR), но в предоставленном файле 20 строк (добавлены FISTS, BREACHCHARGE, BUMPMINE, TABLET, MELEE, SHIELD). Для CS2 используйте только 13.
+Пример RIFLE:
 
-Пример для RIFLE в default (CS2): [ 0.22, 0.07, 0.0, 0.45, 0.15 ] — очередь ~0.22 с (±0.07), без паузы внутри (cadence 0), новая очередь через 0.45 с (±0.15).
+Конфиг	Значение	Интерпретация
+Deathmatch	[ 0.22, 0.07, 0.0, 0.45, 0.15 ]	Очередь ~0.22 с (±0.07), без паузы внутри, новая очередь через 0.45 с (±0.15).
+Rush/Guardian	[ 0.25, 0.55, 0.0, 0.95, 0.25 ]	Очередь ~0.25 с (±0.55, очень большой разброс), cooldown 0.95 с.
+5. Композиты
+Композиты — узлы, которые содержат несколько детей и решают, как их выполнять.
 
-5. Узлы (Nodes)
-5.1 Типы значений
-Тип	Значение
-bool	0 или 1
-int, float	Литеральное число
-number	Число, ConVar (@mp_...) или ключ blackboard
-position	Литерал "x y z", ключ blackboard или targetname энтити
-string	Литерал в '...' или ключ blackboard
-enum	Значение из таблицы Enum
-node, node[]	Дочерний узел / массив узлов
-5.2 Enum-значения
-Ключ	Значения
-entity_type_filter	ALL, PLAYERS, HUMAN_PLAYERS, NOISE, DAMAGE, AREA_DAMAGE, CLASSNAME, GRENADE
-team_filter, attacker_filter	ANY, CT, TERRORIST, SAME, OPPOSITE, ENEMY
-team	ANY, CT, TERRORIST, OPPOSITE
-team_restriction	ANY, CT, T
-shape type	sensor_shape_fov, sensor_shape_sphere (с radius)
-movement_type	BT_ACTION_MOVETO_WALK, BT_ACTION_MOVETO_RUN
-route_type	BT_ACTION_MOVETO_FASTEST_ROUTE, BT_ACTION_MOVETO_SAFEST_ROUTE
-slot	RIFLE, PISTOL, KNIFE, GRENADES, C4
-types (гранаты)	FLASH, FIRE, EXPLOSIVE, DECOY, SMOKE
-operation_type	BT_DECORATOR_TAG_ENTITY_SET, BT_DECORATOR_TAG_ENTITY_CLEAR
-check_type	BT_DECORATOR_TAG_THRESHOLD_AT_LEAST, BT_DECORATOR_TAG_THRESHOLD_AT_MOST
-weapon	BEST или classname (например, weapon_knife)
-5.3 Композиты
-Узел	Ключи	Поведение
-parallel	succeed_after_first (bool), children	Все дети каждый тик. Провал любого = провал. Успех = все (или первый при succeed_after_first=1).
-selector	children	Список приоритетов. Проверка с первого ребёнка каждый тик. Более ранний прошедший останавливает текущего и запускается.
-sequencer	children	По порядку. Провал = стоп. Check-pass смотрит только на текущего ребёнка — пройденные условия не перепроверяются.
-subtree	file (string), name (string), params ({key, value}[])	Запуск другого дерева. params пишут значения в blackboard до старта. Только int или string — float/bool отвергаются.
-5.4 Декораторы
-Оборачивают одного ребёнка через child. Почти все поддерживают negated = 1.
-
-Узел	Ключи	Назначение
-decorator_bot_service	memory_to_expire[], tagged_entities_to_expire[], input_chatter_enemies, basic_chatter_enable, chatter_outnumbered_threshold, child	Корневой сервис: истечение памяти, болтовня.
-decorator_buy_service	output, child	Возвращает массив к покупке.
-decorator_hiding_spot_service	domain, output_hiding_spot, expiration_time, distance_threshold, child	Учёт укрытий; боты в одном домене не проверяют уже проверенные.
-decorator_maybe	chance (float), child	Выполняет ребёнка с шансом (1 = 100%).
-decorator_memory	input, output, output_domain, child	Копирует сущности в память.
-decorator_need_healing	health_threshold, child	Ребёнок, если HP ниже порога.
-decorator_picker_blocked_by_smoke	input, input_domain, output, output_domain, negated, child	Убирает сущности, не покрытые дымом. distance_threshold игнорируется.
-decorator_picker_dedup	input, input_domain, output, output_domain, against, distance_threshold, negated, child	Убирает дубликаты по дистанции до against.
-decorator_picker_grenade_type	input, input_domain, output, output_domain, types[], negated, child	Фильтр гранат по типу.
-decorator_picker_max_score	input, input_domain, output, output_domain, negated, child	Берёт первую сущность (по умолчанию — по порядку на сервере).
-decorator_picker_nearby	input, input_domain, output, output_domain, cutoff_distance, negated, child	Убирает дальше порога.
-decorator_picker_random_by_distance	input, input_domain, output, output_domain, distance_min, distance_max, negated, child	Вероятностный фильтр по дистанции.
-decorator_picker_reaction_time	input, input_domain, output, output_domain, negated, child	Задержка по реакции бота.
-decorator_picker_visible	input, input_domain, output, output_domain, check_fov (bool), negated, child	Убирает невидимые. check_fov = 0 игнорирует FOV.
-decorator_picker_weight_as_distance	input, input_domain, output, output_domain, negated, child	Фильтр по «весу» (для слуха).
-decorator_random_approach_point	output, child	Случайная видимая точка-«вход» в область.
-decorator_random_int	min, max, output, child	Случайное целое.
-decorator_ranker_dist	input, child	Сортирует по дистанции.
-decorator_remove	input_domain, input, remove, child	Удаляет сущности из памяти.
-decorator_remove_key	input, child	Удаляет ключ blackboard.
-decorator_repeat	amount (int), child	Цикл. Без amount — вечно; с N — N раз.
-decorator_run_once	domain, max_attempts, child	Ограничивает запуск. domain — только один бот выполнит.
-decorator_sensor	output, class_name, priority, orphan_only, append_items, entity_type_filter, team_filter, attacker_filter, shape({type, radius}), child	Заполняет output sensed-сущностями.
-decorator_set_reaction_time	input, child	Задержка по реакции.
-decorator_succeed	negated, child	Всегда проходит check-pass; после ребёнка — success (или failure при negated=1).
-decorator_tag_entity	input, output, expiration_time, operation_type, child	Помечает первую сущность из input.
-decorator_tag_threshold	entity_input, tagged_entities_input, amount, check_type, child	Сравнивает количество помеченных.
-decorator_token_service	config({tokens[], assignments[][], team_restriction[]}), output_token_name, output_token_domain, domain, child	Группы ботов (StratTokens).
-decorator_try_lock	domain, child	Блокировка домена — только один бот одновременно.
-decorator_invert	child	Инверсия check-результата ребёнка. В официальных деревьях CS2 не используется (в CS:GO — workaround).
-decorator_wait_success	timeout, child	Ждёт успеха ребёнка или таймаута. Используется в Guardian.
-decorator_dec_global_counter	input_name, child	Уменьшает счётчик. Не используется.
-decorator_find_utility_strat	много	Не используется.
-decorator_route_service	много	Не используется.
-decorator_set_barrier	много	Не используется.
-Важно: параметры acquire_only у action_aim, ratio у action_pull_trigger и distance_threshold у decorator_picker_blocked_by_smoke игнорируются игрой. В официальных файлах они присутствуют как наследие — не полагайтесь на них.
-
-5.5 Условия
-Узел	Ключи	Назначение
-condition_is_empty	input, global (bool), negated, child	Пусто/не существует. global = 1 — глобальный флаг.
-condition_is_equal	source, destination (int или string), negated, child	Равенство.
-condition_is_greater_equal	source, destination, negated, child	≥.
-condition_is_less_equal	source, destination, negated, child	≤.
-condition_is_inv_slot_empty	slot (enum), negated, child	Слот пуст.
-condition_is_weapon_equipped	weapon, negated, child	Активное оружие с этим classname.
-condition_out_of_ammo	negated, child	Нет патронов.
-condition_owns_item	item, items_one_of[], negated, child	Есть предмет.
-condition_is_at_bomb_site	negated, child	На бомбсайте.
-condition_distance_less	input, distance_threshold_min, distance_threshold_max, negated, child	Дистанция меньше порога. Не используется в основных деревьях.
-condition_has_parachute	negated, child	Есть парашют. Используется в Guardian.
-condition_inactive	input[], round_start_threshold_seconds, sensor_inactivity_threshold_seconds, negated, child	Нет активности. Используется в Guardian.
-condition_is_airborne	negated, child	В воздухе. Используется в Guardian.
-condition_is_greater	source, destination, negated, child	>. Не используется.
-condition_is_less	source, destination, negated, child	<. Не используется.
-condition_is_reloading	negated, child	Перезарядка. Не используется.
-condition_is_weapon_suitable	input, weapon, negated, child	Подходит ли оружие для дистанции. Не используется.
-condition_barrier	input_domain, input_name, radius, negated, child	Не используется.
-5.6 Действия
-Узел	Ключи	Назначение
-action_acquire_items	items[], remove_all_items	Выдать предметы.
-action_aim	input, ready (string)	Повернуть к точке. Никогда не разскопится со снайперки до смены оружия.
-action_attack	input, ready, output	Стрелять по input, когда ready истинно.
-action_buy	—	Случайная покупка.
-action_choose_bomb_site_area	input (number), output	Позиция бомбсайта по индексу.
-action_choose_random_waypoint	input, output	Случайный тайл навмеша.
-action_choose_team_spawn_area	output, team (enum)	Navzone со спавнами.
-action_combat_positioning	input, is_attacking (string)	Уклонение/сближение.
-action_equip_item	item, items_one_of[]	Выбрать предмет.
-action_equip_weapon	weapon (classname или BEST)	Выбрать оружие.
-action_flee_area_damage	input, output, max_search_range, threat_min_keep_distance	Безопасная точка от урона по площади.
-action_look_at	input_angles или input_location	Повернуть бота. Указывать одно из двух.
-action_move_to	destination, hiding_spot, threat, auto_look_adjust, damaging_areas_penalty_cost, arrival_epsilon, additional_arrival_epsilon_2d, hiding_spot_check_distance_threshold, nearest_area_distance_threshold, movement_type, route_type	Двигаться к точке.
-action_pull_trigger	—	Нажать ЛКМ.
-action_use	—	Нажать +use.
-action_wait	wait_time_min, wait_time_max, wait_modulo_tick_mod, wait_modulo_tick_add	Заморозить ИИ.
-action_set_global_flag	name, expiration_time_min, expiration_time_max	Глобальный флаг на случайное время.
-action_aim_projectile	input, output	Рассчитать углы броска. Баг: не учитывает траекторию.
-action_choose_guardian_bomb_plant_location	output	Guardian: позиция закладки.
-action_choose_random_waypoint_within_radius	origin, radius, output	Случайная точка в радиусе. Используется в Co-op.
-action_commit_suicide	—	Самоубийство. Используется в Guardian.
-action_compare_global_counter	input_name, input_value	Сравнить счётчик. Используется в Guardian.
-action_coordinated_buy	id_no_purchase, purchases[], team_filter, save_threshold	Скоординированная покупка. Баг: один бот заставляет всех. Не используйте.
-action_crouch	—	Присесть. Используется в Guardian.
-action_custom_buy	item_aliases[]	Покупка по алиасам.
-action_drop_active_weapon	—	—
-action_hide	output, max_range	Случайное укрытие.
-action_inspect_current_weapon	—	—
-action_jump	—	Прыжок. Используется в Co-op.
-action_parachute_positioning	—	Движение по диагонали. Используется в Guardian.
-action_reload	—	Перезарядка.
-action_say	phrase, high_priority	Радио-команда. Используется в Co-op.
-action_secondary_attack	—	—
-action_select_areas_within_radius	input, radius, output	Navzone в радиусе. Используется в Guardian.
-action_set_global_counter	input_name, input_value	Установить счётчик. Используется в Guardian.
-action_set_value_float	key, value	Записать float. Используется в Guardian.
-action_set_value_vector	key, value	Записать позицию. Используется в Guardian.
-action_standup	—	Встать.
-action_teleport	destination	Телепорт.
-action_entity_accept_input	name, input	Отправить input энтити. Используется в Guardian.
-6. Модель выполнения
-Дерево вычисляется каждый тик в два прохода:
-
-Check-pass — сверху вниз. Решает, какие ветки имеют право выполняться. Если корень не проходит — тик «пустой».
-
-Run-pass — выполняет выбранные ветки. Здесь двигаются, целятся, стреляют.
-
-Поскольку check-pass повторяется каждый тик, условия перепроверяются постоянно, а selector может прервать текущую ветку, если более приоритетная начала проходить проверку.
-
-Поведение композитов
-sequencer — check-pass смотрит только текущего ребёнка; run-pass по порядку до провала. Условия позади не перепроверяются.
-
-selector — check-pass с первого ребёнка каждый тик; запускает первого прошедшего; останавливает текущего при появлении более приоритетного.
-
-parallel — все дети каждый тик; провал любого = стоп всех; успех = все (или первый при succeed_after_first = 1).
-
-decorator_repeat — перезапускает ребёнка каждый раз, когда он завершается; с amount = N останавливается после N запусков и возвращает результат последнего.
-
-decorator_succeed — всегда проходит check-pass; после ребёнка возвращает success (или failure при negated=1).
-
-decorator_invert — инвертирует check-результат ребёнка.
-
-condition_* — проверяется в каждом check-pass; пока условие истинно, выполняет ребёнка (или просто успех, если ребёнка нет); при провале — провал ветки. Все условия поддерживают negated = 1.
-
-Пример разворачивания
-text
-sequencer[ move_to(bot_target), look_at(bot_target), wait(2..3) ] в repeat
-Тик 1: move_to двигает на 1 тик → running.
-
-Тики 2..N: игра идёт прямо в move_to — одно непрерывное движение.
-
-Прибытие: move_to success → look_at success.
-
-wait выбирает время окончания и возвращает running.
-
-Все три готовы → sequencer success → repeat заново.
-
-Узлы не двигают бота напрямую. action_move_to управляет pathfinding; action_use/action_reload «нажимают кнопку» на тик; action_aim/action_attack рулят встроенным aiming/shooting, пока не завершатся.
-
-7. Значения и Blackboard
-Большинство значений — ключи blackboard (хранилище бота). Сенсор пишет врагов в output = "Enemy", действие атаки читает их через input = "Enemy".
-
-Строки
-Литерал в одинарных кавычках: 'CT' — кавычки отбрасываются.
-
-Иначе — имя ключа blackboard, который должен содержать строку.
-
-Числа
-Литеральное число.
-
-ConVar: @mp_plant_c4_anywhere.
-
-Ключ blackboard. Если ключ содержит строку, она разрешается ещё раз, но только на 1 уровень.
-
-Позиции и имена сущностей
-Ключи, ожидающие позицию (destination, input_location), принимают:
-
-Литерал: "-1450 2230 2".
-
-Ключ blackboard (позиция, строка или список sensed-сущностей — берётся первая).
-
-Targetname энтити на карте, если ни один ключ так не называется. Используется origin энтити.
-
-Это позволяет управлять ботами с карты: Rush-боты идут к ant.button по имени; скрипт может двигать target-энтити, чтобы перенаправлять ботов.
-
-Домены
-Способ делить состояние между ботами. Кавычки вокруг имён обязательны.
-
-Домен	Где встречается	Назначение
-AllBots	memory_to_expire, input_domain, output_domain	Общая память всех ботов
-'StratTokens'	decorator_token_service	Токены стратегий (Practice, Guardian)
-'PressAntennaButton'	decorator_try_lock	Блокировка нажатия кнопки (Rush)
-'DefuseBombIfNearby'	decorator_try_lock	Блокировка разминирования (Practice)
-Память
-decorator_sensor → output = "Vision" (список сущностей).
-
-decorator_picker_* → сужают "Vision".
-
-decorator_memory → копирует в "ShortTermAttackMemory".
-
-decorator_bot_service в корне → истекает память: {key, time, distance}.
-
-Стандартные имена памяти:
-
-ShortTermAttackMemory (0.7 с, 0 дистанция)
-
-LongTermMemory (10 с, 500)
-
-ShortTermInvestigateMemory (3 с, 200)
-
-ShortTermDamageMemory (Practice, Guardian)
-
-ShortTermAreaDamageMemory (Practice, Guardian)
-
-DamageThroughSmokeMemory (Practice, Guardian)
-
-Threats (Practice, Guardian, домен AllBots)
-
-Глобальные флаги и счётчики
-action_set_global_flag устанавливает именованный флаг на случайное время между expiration_time_min и expiration_time_max. Проверяется через condition_is_empty с global = 1.
-
-action_set_global_counter, decorator_dec_global_counter, action_compare_global_counter — именованные счётчики.
-
-Параметры subtree
-subtree может записывать значения в blackboard до старта:
+Узел	Ключи	Что делает	Пример
+parallel	succeed_after_first (bool), children (node[])	Запускает всех детей каждый тик. Провал любого = провал всего. Успех = все дети успешны (или первый, если succeed_after_first = 1).	parallel[aim, attack] — бот одновременно целится и стреляет.
+selector	children (node[])	Список приоритетов. Проверяет детей с первого каждый тик. Первый прошедший запускается. Если более ранний ребёнок начал проходить — текущий останавливается.	selector[buy, damage_aim, attack, hunt] — если нужно купить — покупает, иначе если есть урон — целится, иначе атакует, иначе охотится.
+sequencer	children (node[])	Выполняет детей по порядку. Провал любого = стоп. Успех = все прошли. Check-pass смотрит только на текущего ребёнка — пройденные условия не перепроверяются.	sequencer[move_to, look_at, wait] — сначала дойди, потом посмотри, потом подожди.
+subtree	file (string), name (string), params ({key, value}[])	Запускает другое дерево из файла. params записывают значения в blackboard до старта. Только int или string — float/bool отвергаются. Имена ключей регистронезависимы (Name = name).	subtree file="bt_attack.kv3" name="Attack" — запускает модуль атаки.
+Пример subtree с параметрами:
 
 kv3
 {
@@ -1135,9 +248,220 @@ kv3
         { key = "WaitTime" value = 3 }
     ]
 }
-Значения — только целые или строки. Дробные и булевы отвергаются с ошибкой [AI BT]: unsupported type for subtree parameter.
+6. Декораторы
+Декораторы оборачивают одного ребёнка через child. Почти все поддерживают negated = 1 (инверсия check-результата).
 
-8. Зарезервированные переменные
+6.1 Корневые сервисы
+Узел	Ключи	Что делает	Где встречается
+decorator_bot_service	memory_to_expire ({key, time, distance, domain}[]), tagged_entities_to_expire (string[]), input_chatter_enemies (string), basic_chatter_enable (bool), chatter_outnumbered_threshold (int), child	Корневой сервис. Истекает память (удаляет старые записи), управляет болтовнёй. memory_to_expire — список ключей памяти с временем жизни и дистанцией.	Все деревья (Co-op — с болтовнёй)
+decorator_buy_service	output (string), child	Возвращает массив предметов к покупке. Выход — ключ blackboard (обычно ShouldBuy).	Deathmatch, Practice, Guardian (кроме card13)
+decorator_hiding_spot_service	domain (string), output_hiding_spot (string), expiration_time (float), distance_threshold (float), child	Учитывает укрытия. Боты в одном домене не проверяют уже проверенные укрытия. Выход — ключ с укрытием (обычно HidingSpot).	Practice, Guardian, Co-op
+6.2 Пикеры (фильтры сущностей)
+Все пикеры имеют input, input_domain, output, output_domain, negated. Они сужают список сущностей.
+
+Узел	Доп. ключи	Что делает	Пример
+decorator_picker_nearby	cutoff_distance (float)	Убирает сущности дальше cutoff_distance.	bt_memorize_enemies_vision — 1500.
+decorator_picker_visible	check_fov (bool, по умолчанию 1)	Убирает невидимые сущности. check_fov = 0 — игнорирует FOV (видит на 360°).	bt_select_nearby_threat — check_fov = 0.
+decorator_picker_reaction_time	—	Задерживает выход на reaction_time бота (из конфига). Бот «думает» перед реакцией.	bt_attack — input = "ShortTermAttackMemory" output = "Enemy".
+decorator_picker_dedup	against (string), distance_threshold (float)	Убирает дубликаты — сущности, которые ближе distance_threshold к сущностям из against.	bt_memorize_noises — against = "LongTermMemory" distance_threshold = 100.
+decorator_picker_random_by_distance	distance_min, distance_max	Вероятностный фильтр по дистанции. Ближе к min — менее вероятно удаление; ближе к max — более вероятно.	bt_memorize_noises — 800–3000.
+decorator_picker_weight_as_distance	—	Убирает сущности, чья дистанция больше их «веса». Вес — внутреннее понятие, используется для слуха.	bt_memorize_noises.
+decorator_picker_grenade_type	types[] (enum)	Фильтр гранат по типу (FLASH, FIRE, EXPLOSIVE, DECOY, SMOKE).	bt_memorize_area_damage_grenades — ["FIRE", "EXPLOSIVE"].
+decorator_picker_blocked_by_smoke	—	Оставляет только сущности, которые закрыты дымом (за дымом). Убирает тех, кто не за дымом. distance_threshold игнорируется.	bt_memorize_damage — копирует Damage в DamageThroughSmokeMemory только если источник за дымом.
+decorator_picker_max_score	—	Берёт первую сущность из списка. По умолчанию — по порядку на сервере. Если перед ним стоит decorator_ranker_dist, берётся ближайшая.	bt_attack — ranker_dist сортирует, max_score берёт ближайшего.
+6.3 Ранкеры
+Узел	Ключи	Что делает	Пример
+decorator_ranker_dist	input (string)	Сортирует сущности по дистанции (ближайшие первыми).	bt_attack, bt_select_nearby_threat, bt_pickup_bomb_if_nearby, bt_pickup_hostage, bt_defuse_bomb_if_nearby.
+6.4 Сенсоры
+Узел	Ключи	Что делает	Пример
+decorator_sensor	output (string), class_name (string), priority (int), orphan_only (bool), append_items (bool), entity_type_filter (enum), team_filter (enum), attacker_filter (enum), shape ({type, radius}), child	Сканирует мир и записывает найденные сущности в output. shape — форма сканирования: sensor_shape_fov (конус впереди) или sensor_shape_sphere (сфера вокруг бота с radius). orphan_only = 1 — только «бесхозные» сущности (бомба, заложник, не занятые другим ботом). append_items = 1 — добавить к существующему списку, а не заменить. priority — приоритет сенсора.	bt_memorize_enemies_vision — FOV, PLAYERS, ENEMY → Vision.
+6.5 Память
+Узел	Ключи	Что делает	Пример
+decorator_memory	input (string), output (string), output_domain (string), child	Копирует сущности из input в output (память). Если указан output_domain — в общую память домена (например, AllBots).	bt_memorize_enemies_vision — input = "Vision" output = "ShortTermAttackMemory" и output = "LongTermMemory".
+decorator_set_reaction_time	input, child	Задерживает прохождение input на reaction_time бота.	bt_memorize_damage — input = "Damage".
+6.6 Управление потоком
+Узел	Ключи	Что делает	Пример
+decorator_repeat	amount (int), child	Перезапускает ребёнка каждый раз, когда он завершается. Без amount — вечно. С amount = N — N раз и возвращает результат последнего.	decorator_repeat вокруг всего дерева — бесконечный цикл.
+decorator_maybe	chance (float, 0–1), child	Выполняет ребёнка с вероятностью chance. 1 = 100%, 0.7 = 70%.	bt_plant_bomb_if_owned — 0.5. Co-op guard/roam — 0.7. bt_throw_utility_if_covered — 0.15.
+decorator_succeed	negated (bool), child	Без negated: всегда проходит check-pass, после ребёнка возвращает success. С negated = 1: всегда проходит check-pass, после ребёнка возвращает failure. Используется для side-effect действий, чтобы не останавливать selector.	bt_clear_threats_within_fov — succeed negated=1 (очищает угрозы, но всегда failure).
+decorator_invert	child	Инвертирует check-результат ребёнка. Если ребёнок не прошёл — invert проходит. Если прошёл — invert не проходит. Во время работы результаты ребёнка проходят без изменений.	В предоставленных деревьях не встречается — в CS2 вместо него используют negated = 1. Требует тестирования.
+decorator_run_once	domain (string), max_attempts (int), child	Ограничивает запуск. Без domain — каждый бот выполняет один раз. С domain — только один бот на сервере выполняет.	Guardian card7_2 — domain = "'AllBots'", domain = "'SetupGlobalCounters'".
+decorator_try_lock	domain (string), child	Блокирует домен на время выполнения ребёнка. Только один бот может выполнять ребёнка одновременно.	Rush — "'PressAntennaButton'". bt_pickup_bomb_if_nearby — "'PickupBombIfNearby'". bt_defuse_bomb_if_nearby — "'DefuseBombIfNearby'".
+decorator_wait_success	timeout (float), child	Ждёт, пока ребёнок вернёт success, или пока не истечёт timeout секунд.	Guardian card13 — 30. Card7_2 — 4.
+decorator_need_healing	health_threshold (int), child	Выполняет ребёнка, если HP бота ниже health_threshold.	bt_heal_if_needed — 60.
+decorator_random_int	min (int), max (int), output (string), child	Генерирует случайное целое от min до max и пишет в output.	Deathmatch — min = 0 max = 1 output = "BombSiteIndex". Guardian card1 — min = 0 max = 0.
+decorator_random_approach_point	output (string), child	Генерирует случайную видимую точку в навмеше — «вход» в текущую область. Полезно для осмотра.	bt_look_around — output = "ApproachPoint".
+6.7 Теги и счётчики
+Узел	Ключи	Что делает	Пример
+decorator_tag_entity	input (string), output (string), expiration_time (float), operation_type (enum), child	Помечает первую сущность из input в output. operation_type: SET (добавить) или CLEAR (убрать). expiration_time — через сколько секунд тег снимется.	bt_attack — SET expiration_time=1. bt_throw_utility_if_covered — CLEAR.
+decorator_tag_threshold	entity_input (string), tagged_entities_input (string), amount (int), check_type (enum), child	Сравнивает количество помеченных сущностей. AT_LEAST — минимум amount; AT_MOST — максимум amount.	bt_plant_bomb_if_covered — amount = 2 AT_LEAST (закладка, если в бою ≥2 врага).
+decorator_token_service	config ({tokens[], assignments[][], team_restriction[]}), output_token_name (string), output_token_domain (string), domain (string), child	Раздаёт ботам «токены» (роли). tokens — список имён ролей. assignments — матрица: сколько ботов получают каждый токен в каждом варианте. team_restriction — ограничение по команде (T, CT). Выход — GroupId (имя токена) и GroupMemberId (номер в группе).	Practice — 10 токенов, по 1 боту. Guardian blacksite_1 — tokens=["Parachute"] assignments=[[1000]].
+decorator_remove	input_domain (string), input (string), remove (string), child	Удаляет сущности из input (в домене input_domain), которые есть в remove.	bt_clear_threats_within_fov — input_domain = "AllBots" input = "Threats" remove = "ThreatsWithinFOV".
+decorator_remove_key	input (string), child	Удаляет ключ blackboard.	Deathmatch — input = "ShouldBuy". bt_select_nearby_threat — input = "NearestThreatMemory".
+decorator_dec_global_counter	input_name (string), child	Уменьшает глобальный счётчик на 1.	В предоставленных деревьях не встречается — требует тестирования.
+decorator_find_utility_strat	много	—	В предоставленных деревьях не встречается — требует тестирования.
+decorator_route_service	много	—	В предоставленных деревьях не встречается — требует тестирования.
+decorator_set_barrier	много	—	В предоставленных деревьях не встречается — требует тестирования.
+7. Условия
+Условия проверяются в каждом check-pass. Пока условие истинно — выполняется ребёнок (или просто успех). При провале — провал ветки. Все поддерживают negated = 1.
+
+Узел	Ключи	Что делает	Где встречается
+condition_is_empty	input (string), global (bool), negated, child	Проверяет, пуст ли ключ или его нет. global = 1 — проверяет глобальный флаг.	Deathmatch — ShouldBuy negated=1. bt_plant_bomb_if_owned — DontPlantBomb global=1.
+condition_is_equal	source (string), destination (int или string), negated, child	Проверяет равенство source и destination.	Practice — TeamName = 'T'. Guardian — @mp_plant_c4_anywhere = 1. NumberOfAliveTerrorists = 1. Co-op — LastCoopSpawnPointName = 'enemy.wave02'.
+condition_is_greater_equal	source, destination, negated, child	Проверяет source ≥ destination.	Официальные деревья.
+condition_is_less_equal	source, destination, negated, child	Проверяет source ≤ destination.	Официальные деревья.
+condition_is_greater	source, destination, negated, child	Проверяет source > destination.	В предоставленных деревьях не встречается — требует тестирования.
+condition_is_less	source, destination, negated, child	Проверяет source < destination.	В предоставленных деревьях не встречается — требует тестирования.
+condition_is_inv_slot_empty	slot (enum), negated, child	Проверяет, пуст ли слот (RIFLE, PISTOL, KNIFE, GRENADES, C4).	В предоставленных деревьях не встречается — требует тестирования.
+condition_is_weapon_equipped	weapon (string), negated, child	Проверяет, что активное оружие — с этим classname.	bt_attack — weapon = "weapon_knife".
+condition_out_of_ammo	negated, child	Проверяет, что в активном оружии нет патронов.	bt_attack.
+condition_owns_item	item (string), items_one_of (string[]), negated, child	Проверяет, есть ли у бота предмет (по classname).	bt_plant_bomb_* — weapon_c4. bt_throw_utility_if_covered — weapon_hegrenade, weapon_incgrenade.
+condition_is_at_bomb_site	negated, child	Проверяет, находится ли бот на бомбсайте.	bt_plant_bomb_*.
+condition_distance_less	input (string), distance_threshold_min (float), distance_threshold_max (float), negated, child	Проверяет, что дистанция до input меньше случайного порога между min и max.	Co-op guard — 450–550.
+condition_has_parachute	negated, child	Проверяет, есть ли у бота парашют.	Guardian blacksite_1.
+condition_inactive	input ({key}[]), round_start_threshold_seconds (float), sensor_inactivity_threshold_seconds (float), negated, child	Проверяет, что в указанных ключах нет активности в течение sensor_inactivity_threshold_seconds секунд, и с начала раунда прошло не менее round_start_threshold_seconds секунд.	Guardian (все деревья) — 60 с нет активности и прошло 90 с → самоубийство.
+condition_is_airborne	negated, child	Проверяет, что бот в воздухе.	Guardian blacksite_1 (парашют), county_2 (не атаковать в воздухе).
+condition_is_reloading	negated, child	Проверяет, что активное оружие перезаряжается.	В предоставленных деревьях не встречается — требует тестирования.
+condition_is_weapon_suitable	input (string), weapon (string), negated, child	Проверяет, подходит ли оружие для дистанции до input.	В предоставленных деревьях не встречается — требует тестирования.
+condition_barrier	input_domain (string), input_name (string), radius (float), negated, child	—	В предоставленных деревьях не встречается — требует тестирования.
+8. Действия
+Действия возвращают running, пока не завершатся, затем success или failure.
+
+Узел	Ключи	Что делает	Где встречается
+action_aim	input (position), ready (string)	Поворачивает бота к точке input. Когда прицел готов — устанавливает флаг ready. Никогда не разскопится со снайперки до смены оружия. acquire_only игнорируется.	bt_attack — input = "Enemy" ready = "AimReady".
+action_attack	input (string), ready (string), output (string)	Стреляет по input, когда ready истинно. Если ready не указан — стреляет сразу. output устанавливается в true, пока идёт атака.	bt_attack — input = "Enemy" output = "Attacking" ready = "AimReady".
+action_move_to	destination (position), hiding_spot (number или ключ), threat (string), auto_look_adjust (bool), damaging_areas_penalty_cost (float), arrival_epsilon (float), additional_arrival_epsilon_2d (float), hiding_spot_check_distance_threshold (float), nearest_area_distance_threshold (float), movement_type (enum), route_type (enum)	Ведёт бота к destination по навмешу. movement_type — WALK или RUN. route_type — FASTEST_ROUTE или SAFEST_ROUTE. hiding_spot — укрытие для проверки. threat — угроза для избегания. arrival_epsilon — насколько близко считать прибытием. nearest_area_distance_threshold — насколько близко к нав-зоне считать прибытием (20 = почти вплотную). auto_look_adjust = 0 — не крутить головой при движении.	bt_plant_bomb_if_owned — destination = "TargetArea" hiding_spot = "HidingSpot" threat = "NearestThreatMemory".
+action_pull_trigger	—	Нажимает ЛКМ (стреляет). ratio игнорируется (в файлах 1).	bt_plant_bomb_if_owned — repeat вокруг (стреляет, пока не закончится закладка).
+action_use	—	Нажимает +use (использовать, разминировать, подобрать).	Rush — нажать кнопку. bt_defuse_bomb_if_nearby — repeat вокруг.
+action_look_at	input_angles (string) или input_location (position)	Поворачивает бота. Указывать одно из двух. input_angles — углы (как setang). input_location — позиция.	bt_attack — input_location = "Enemy". Guardian — input_location = "4363.661621 5653.200195 735.644348".
+action_wait	wait_time_min (float), wait_time_max (float), wait_modulo_tick_mod (int), wait_modulo_tick_add (int)	Замораживает ИИ на случайное время между min и max. wait_modulo_tick_mod/add — для синхронизации по тикам (редко используется).	bt_attack — 0.2–0.5.
+action_equip_weapon	weapon (string, classname или BEST)	Выбирает оружие. BEST — лучшее доступное.	bt_attack — BEST. Guardian card13 — weapon_shield.
+action_equip_item	item (string), items_one_of (string[])	Выбирает предмет по classname. items_one_of — любой из списка.	bt_heal_if_needed — weapon_healthshot. bt_plant_bomb_* — weapon_c4. bt_throw_utility_if_covered — weapon_hegrenade, weapon_incgrenade.
+action_buy	—	Случайная покупка.	Deathmatch/Practice — после action_wait 3-3.
+action_choose_bomb_site_area	input (number), output (string)	Возвращает позицию бомбсайта по индексу. input может быть 0/1, ключом blackboard (BombSiteIndex) или ConVar (@mp_guardian_target_site).	Deathmatch — input = "BombSiteIndex" output = "HuntAreas". Guardian — input = "@mp_guardian_target_site" output = "BombSiteArea".
+action_choose_random_waypoint	input (string), output (string)	Выбирает случайный тайл навмеша из input (нав-зоны) и пишет позицию в output.	Deathmatch — input = "HuntAreas" output = "TargetHuntArea".
+action_choose_team_spawn_area	output (string), team (enum)	Возвращает нав-зону со спавнами команды.	Deathmatch — output = "HuntAreas".
+action_choose_random_waypoint_within_radius	origin (position), radius (number), output (string)	Выбирает случайную точку в радиусе radius вокруг origin.	Co-op roam — LastCoopSpawnPointLocation 700. Co-op rush — RushCenterLocation RushCenterRadius.
+action_combat_positioning	input (string), is_attacking (string)	Уклонение/сближение. is_attacking — флаг, установленный action_attack.	bt_attack — input = "Enemy" is_attacking = "Attacking".
+action_flee_area_damage	input (string), output (string), max_search_range (float), threat_min_keep_distance (float)	Находит безопасную точку от урона по площади и пишет в output.	bt_flee_area_damage_threats — 500.
+action_set_global_flag	name (string), expiration_time_min (float), expiration_time_max (float)	Устанавливает глобальный флаг на случайное время между min и max.	bt_plant_bomb_if_owned — 'DontPlantBomb' 3–5.
+action_set_global_counter	input_name (string), input_value (int)	Устанавливает глобальный счётчик.	Guardian card7_2 — 'PreparingToThrowSmoke'=3, 'ThrowPalaceFlash'=1, 'PositioningForTopSmoke'=1.
+action_compare_global_counter	input_name (string), input_value (int)	Сравнивает глобальный счётчик с input_value.	Guardian card7_2 — 'WaitForCoordinatedBuy'=0. Card13 — 'RushSite'=1.
+action_set_value_float	key (string), value (float)	Записывает float в blackboard.	Co-op bt_determine_rush_center — 'RushCenterRadius'.
+action_set_value_vector	key (string), value (position)	Записывает позицию в blackboard.	Co-op bt_determine_rush_center — 'RushCenterLocation'.
+action_aim_projectile	input (string), output (string)	Рассчитывает углы для броска гранаты. Баг: не учитывает траекторию — бот бросает неточно.	bt_throw_utility_if_covered — input = "Enemy" output = "UtilityTarget".
+action_choose_guardian_bomb_plant_location	output (string)	Выбирает позицию закладки бомбы (Guardian).	bt_plant_bomb_* — output = "TargetArea".
+action_commit_suicide	—	Убивает бота.	Guardian (все деревья) — если condition_inactive.
+action_jump	—	Прыжок.	Co-op rush — если нет RushCenterLocation.
+action_parachute_positioning	—	Движение по диагонали (для парашюта).	Guardian blacksite_1.
+action_say	phrase (string), high_priority (bool)	Радио-команда.	Co-op guard/roam — "Clear".
+action_select_areas_within_radius	input (position), radius (number или string), output (string)	Выбирает нав-зоны в радиусе вокруг input. radius может быть числом, строкой-литералом ("300") или ключом blackboard.	Guardian insertion2_a/b — input = "Hostage" radius = "300" output = "HostageSurroundingAreas".
+action_entity_accept_input	name (string), input (string)	Отправляет input энтити по targetname. Используется для нажатия кнопок.	Guardian county_2 — name = "'AutoInstance7-_03creek_door_button'" input = "'Use'".
+action_coordinated_buy	id_no_purchase (string), purchases ({items[], id}[]), team_filter (enum), save_threshold (int)	Скоординированная покупка. Баг: один бот заставляет всех покупать.	Guardian card7_2 — через bt_coordinated_buy с decorator_run_once.
+action_custom_buy	item_aliases[] (string[])	Покупка по алиасам.	В предоставленных деревьях не встречается — требует тестирования.
+action_hide	output (string), max_range (float)	Случайное укрытие.	В предоставленных деревьях не встречается — требует тестирования.
+action_teleport	destination (position)	Телепорт.	В предоставленных деревьях не встречается — требует тестирования.
+action_acquire_items	items[] (string[]), remove_all_items (bool)	Выдаёт предметы.	В предоставленных деревьях не встречается — требует тестирования.
+action_crouch	—	Присесть.	В предоставленных деревьях не встречается — требует тестирования.
+action_standup	—	Встать.	В предоставленных деревьях не встречается — требует тестирования.
+action_reload	—	Перезарядка.	В предоставленных деревьях не встречается — требует тестирования.
+action_drop_active_weapon	—	Выбросить активное оружие.	В предоставленных деревьях не встречается — требует тестирования.
+action_inspect_current_weapon	—	Проиграть анимацию осмотра оружия.	В предоставленных деревьях не встречается — требует тестирования.
+action_secondary_attack	—	Вторичная атака (ПКМ).	В предоставленных деревьях не встречается — требует тестирования.
+9. Модель выполнения
+Каждый тик дерево обходится дважды:
+
+Check-pass — сверху вниз. Решает, какие ветки имеют право выполняться. Если корень не проходит — тик «пустой» (ничего не выполняется).
+
+Run-pass — выполняет выбранные ветки. Здесь бот двигается, целится, стреляет.
+
+Поскольку check-pass повторяется каждый тик, условия перепроверяются постоянно. selector может прервать текущую ветку, если более приоритетная начала проходить проверку.
+
+Поведение композитов:
+
+Композит	Check-pass	Run-pass	Прерывание
+sequencer	Только текущий ребёнок	По порядку до провала	Нет (условия позади не перепроверяются)
+selector	С первого ребёнка каждый тик	Запускает первого прошедшего	Да — останавливает текущего при появлении более приоритетного
+parallel	Все дети	Все дети каждый тик	Провал любого = стоп всех
+Пример разворачивания:
+
+text
+sequencer[ move_to(bot_target), look_at(bot_target), wait(2..3) ] в repeat
+Тик 1: move_to двигает на 1 тик → running.
+
+Тики 2..N: игра идёт прямо в move_to — одно непрерывное движение.
+
+Прибытие: move_to success → look_at success.
+
+wait выбирает время окончания и возвращает running.
+
+Все три готовы → sequencer success → repeat заново.
+
+Важно: узлы не двигают бота напрямую. action_move_to управляет pathfinding; action_use/action_reload «нажимают кнопку» на тик; action_aim/action_attack рулят встроенным aiming/shooting, пока не завершатся.
+
+10. Blackboard, домены, память
+Blackboard — хранилище ключей-значений бота. Сенсор пишет врагов в output = "Enemy", действие атаки читает их через input = "Enemy".
+
+Строки
+Тип	Пример	Примечание
+Литерал	'CT'	В одинарных кавычках; кавычки отбрасываются.
+Ключ blackboard	TeamName	Должен содержать строку.
+Числа
+Тип	Пример	Примечание
+Литерал	3, 0.5	—
+ConVar	@mp_plant_c4_anywhere	—
+Ключ blackboard	RoundNumber	Если содержит строку — разрешается ещё раз, но только на 1 уровень.
+Позиции и имена сущностей
+Ключи, ожидающие позицию (destination, input_location), принимают:
+
+Тип	Пример	Примечание
+Литерал	"-1450 2230 2"	—
+Ключ blackboard	TargetArea	Позиция, строка или список sensed-сущностей (берётся первая).
+Targetname энтити	ant.button	Если ни один ключ так не называется. Используется origin энтити.
+Это позволяет управлять ботами с карты: Rush-боты идут к ant.button по имени; скрипт может двигать target-энтити, чтобы перенаправлять ботов.
+
+Домены
+Домены — способ делить состояние между ботами. Кавычки вокруг имён обязательны.
+
+Домен	Где встречается	Назначение
+AllBots	memory_to_expire, input_domain, output_domain, decorator_run_once	Общая память всех ботов; блокировка для run_once
+'StratTokens'	decorator_token_service	Токены стратегий (Practice, Guardian)
+'PressAntennaButton'	decorator_try_lock	Блокировка нажатия кнопки (Rush)
+'DefuseBombIfNearby'	decorator_try_lock	Блокировка разминирования (Practice)
+'PickupBombIfNearby'	decorator_try_lock	Блокировка подбора бомбы
+'SetupGlobalCounters'	decorator_run_once	Установка счётчиков (Guardian card7_2)
+Память
+decorator_sensor → output = "Vision" (список сущностей).
+
+decorator_picker_* → сужают "Vision".
+
+decorator_memory → копирует в "ShortTermAttackMemory".
+
+decorator_bot_service в корне → истекает память: {key, time, distance}.
+
+Стандартные имена памяти:
+
+Ключ	Время	Дистанция	Что хранит
+ShortTermAttackMemory	0.7	0	Врагов, виденных недавно
+LongTermMemory	10	500	Врагов, виденных давно
+ShortTermInvestigateMemory	3	200 (2000 в card13)	События для исследования
+ShortTermDamageMemory	0.7	0	Источники урона
+ShortTermAreaDamageMemory	3	0	Урон по площади (гранаты, инферно)
+DamageThroughSmokeMemory	3	0	Источники урона за дымом
+Threats (AllBots)	10	0	Глобальные угрозы
+Другие ключи blackboard:
+Vision, Hearing, Damage, Grenades, Infernos, AreaDamage, FleeSpot, TargetArea, TargetHuntArea, HuntAreas, BombSiteArea, BombSiteIndex, RandomRoamPoint, RushPoint, RushCenterLocation, RushCenterRadius, UtilityTarget, ApproachPoint, HidingSpot, ShouldBuy, NearestThreat, NearestThreatMemory, Event, VisibleShortTermInvestigateMemory, ShortTermInvestigateMemoryWithinReactionTime, Bombs, PlantedBomb, Hostage, GroupId, GroupMemberId, EngagedEntities, ThreatsWithinFOV, RushSite, DontPlantBomb, PreparingToThrowSmoke, ThrowPalaceFlash, PositioningForTopSmoke, WaitForCoordinatedBuy.
+
+Глобальные флаги и счётчики
+Узел	Что делает
+action_set_global_flag	Устанавливает именованный флаг на случайное время между expiration_time_min и expiration_time_max. Проверяется через condition_is_empty с global = 1.
+action_set_global_counter	Устанавливает именованный счётчик.
+decorator_dec_global_counter	Уменьшает счётчик.
+action_compare_global_counter	Сравнивает счётчик с input_value.
+Параметры subtree
+subtree может записывать значения в blackboard до старта. Только int или string — float/bool отвергаются с ошибкой [AI BT]: unsupported type for subtree parameter.
+
+11. Зарезервированные переменные
 Игра сама кладёт их в blackboard. Читать можно, создавать нельзя.
 
 Переменная	Тип	Откуда	Где используется
@@ -1151,65 +475,86 @@ AmmoCount/current	int	Движок	—
 TeamName	string	Движок	condition_is_equal source="TeamName" destination="'T'" в Practice
 RoundNumber	int	Движок	Все bt_t_*.kv3 и bt_ct_*.kv3 в Practice
 BlindnessPercentage	float	Движок	—
-GuardianWaveNumber	int	Движок (Guardian)	—
-LastCoopSpawnPointName	string	Движок (Co-op)	—
-LastCoopSpawnPointLocation	Vector	Движок (Co-op)	—
+GuardianWaveNumber	int	Движок (Guardian)	condition_is_equal в Guardian county_2
+LastCoopSpawnPointName	string	Движок (Co-op)	condition_is_equal в bt_determine_rush_center
+LastCoopSpawnPointLocation	Vector	Движок (Co-op)	action_move_to в Co-op guard/roam, action_choose_random_waypoint_within_radius в roam
 Примечание: TeamName и RoundNumber отсутствуют в списке Source2 Wiki, но активно используются в Practice. Список на вики неполный.
 
-9. Отладка
+12. Отладка
 Команда	Назначение	Требования
 mp_bot_ai_bt "путь"	Назначить дерево всем ботам	—
 mp_bot_ai_bt_clear_cache	Сбросить кэш после правок	—
 cv_bot_ai_bt_debug_target <index>	Нарисовать дерево бота	sv_cheats 1, локальный/приватный сервер
 cv_bot_ai_bt_hiding_spot_show	Показать укрытия	sv_cheats 1
 cv_bot_ai_bt_moveto_show_next_hiding_spot	Показать следующее проверяемое укрытие	sv_cheats 1
-Что искать в консоли:
+developer 1	Писать [AI BT]: Loaded behavior tree '<file>' при спавне	—
+Сообщения:
 
-[AI BT]: Loaded behavior tree '<file>' — при developer 1.
-
-[AI BT] warnings — всегда.
-
-Blackboard entry 'X' does not exist nor it is a valid entity name — ключ не найден.
-
-[AI BT]: Config node 'attack' must contain 13 entries — неверное число строк.
-
-[AI BT]: unsupported type for subtree parameter — float/bool в params.
-
-10. Различия CS:GO и CS2
+Сообщение	Причина
+[AI BT]: Loaded behavior tree '<file>'	При developer 1
+[AI BT] warnings	Всегда
+Blackboard entry 'X' does not exist nor it is a valid entity name	Ключ не найден
+[AI BT]: Config node 'attack' must contain 13 entries	Неверное число строк
+[AI BT]: unsupported type for subtree parameter	Float/bool в params
+13. CS:GO vs CS2
 Аспект	CS:GO	CS2
 Уровни скилла	8 (без elite)	9 (с elite)
-Строк в attack	16 (в старых версиях; в современных может быть больше)	13 (ровно, иначе ошибка)
+Строк в attack	16 (в старых); в предоставленном файле 20	13 для Deathmatch/Rush/Practice, 20 для Co-op/Guardian
 aim_ready_angle_tolerance	Не документирован	Есть в конфиге
 TeamName / RoundNumber	Не документированы	Используются в Practice
 Документация узлов	Неточная, много TODO	Точный список читаемых ключей
-Неиспользуемые узлы	Не отмечены	36 отмечены (но некоторые используются в Guardian/Co-op)
+Узлы вне официальных деревьев	Не отмечены	36 отмечены, но часть используется в Guardian/Co-op
 Игнорируемые параметры	Не отмечены	acquire_only, ratio, distance_threshold
 Модель выполнения	Не описана	Два прохода, детально
 Subtree params	Не описаны	Только int/string
 decorator_picker_*	Без доменов	С input_domain/output_domain
 decorator_sensor	Без append_items	С append_items
 action_wait	2 ключа	+ wait_modulo_tick_mod/add
-11. Примеры и паттерны
-11.1 Простое дерево (движение, взгляд, ожидание)
-kv3
-{
-    config = "scripts/ai/deathmatch/bt_config.kv3"
-    root =
-    {
-        type = "decorator_repeat"
-        child =
-        {
-            type = "sequencer"
-            children =
-            [
-                { type = "action_move_to" destination = "bot_target" movement_type = "BT_ACTION_MOVETO_RUN" route_type = "BT_ACTION_MOVETO_FASTEST_ROUTE" }
-                { type = "action_look_at" input_location = "bot_target" }
-                { type = "action_wait" wait_time_min = 2 wait_time_max = 3 }
-            ]
-        }
-    }
-}
-11.2 Паттерны из официальных деревьев
+14. Готовые модули
+Deathmatch / Rush / Practice
+Модуль	Что делает
+bt_attack	Берёт ShortTermAttackMemory → reaction time → сортирует по дистанции → берёт ближайшего → если есть враг: помечает его в EngagedEntities (SET, 1 с) → параллельно: экипирует BEST, повторяет succeed[out_of_ammo → equip BEST] (смена оружия при пустом магазине), selector[flee_area_damage, если нож — бежит к врагу, иначе combat_positioning], повторяет aim Enemy ready="AimReady", повторяет attack Enemy ready="AimReady" output="Attacking".
+bt_memorize_enemies_vision	Сенсор FOV, PLAYERS, ENEMY → nearby 1500 → visible → reaction time → ShortTermAttackMemory + LongTermMemory.
+bt_memorize_noises	Сенсор сфера 3000, NOISE → weight_as_distance → random_by_distance (800–3000) → dedup (100 к LongTermMemory) → reaction time → LongTermMemory.
+bt_memorize_damage	Сенсор DAMAGE → reaction time → ShortTermDamageMemory; blocked_by_smoke (3000, игнор) → DamageThroughSmokeMemory.
+bt_memorize_area_damage_grenades	Сенсор GRENADE → grenade_type (FIRE, EXPLOSIVE) → nearby 2500 → visible → reaction time → ShortTermAreaDamageMemory.
+bt_memorize_area_damage_infernos	Сенсор CLASSNAME inferno → nearby 1000 → reaction time → ShortTermAreaDamageMemory.
+bt_memorize_area_damage_current	Сенсор AREA_DAMAGE → ShortTermAreaDamageMemory.
+bt_memorize_nearest_investigation	succeed → condition_is_empty ShortTermInvestigateMemory → если пусто: memory LongTermMemory → ShortTermInvestigateMemory → ranker_dist → max_score. Всегда успех, но если память была пуста — заполняет ближайшим событием.
+bt_investigate_closest_memorized_event	Берёт ShortTermInvestigateMemory → reaction time → если есть событие: экипирует BEST, если видимо — смотрит и ждёт 0.2–0.5 с, затем идёт к событию (move_to threat="NearestThreatMemory").
+bt_heal_if_needed	Если HP < 60: экипирует weapon_healthshot, ждёт 1 с, action_pull_trigger (ratio игнор).
+bt_face_damage_inflictor	Берёт ShortTermDamageMemory → reaction time → если есть: целится (acquire_only игнор), параллельно succeed → blocked_by_smoke (3000, игнор) → если есть: повторяет action_attack output="Attacking" (без input, стреляет по текущему прицелу).
+bt_attack_damage_inflictor_smoke	Берёт DamageThroughSmokeMemory → reaction time → сортирует → берёт ближайшего → целится, повторяет action_attack input="Damage" output="Attacking".
+bt_flee_area_damage_threats	Если ShortTermAreaDamageMemory не пусто: action_flee_area_damage (500) → бежит к FleeSpot (auto_look_adjust=0).
+bt_look_around	random_approach_point → action_aim (acquire_only) → ждёт 0.2–0.5 с.
+bt_plant_bomb_if_covered	Если есть weapon_c4 и в ShortTermAttackMemory ≥2 врага: выбирает бомбсайт, идёт, проверяет @mp_plant_c4_anywhere или is_at_bomb_site, экипирует C4, ждёт 0.5 с, повторяет action_pull_trigger.
+bt_plant_bomb_if_owned	Если есть weapon_c4 и нет флага DontPlantBomb: экипирует BEST, выбирает бомбсайт, идёт, проверяет site, экипирует C4, ждёт 1 с, параллельно: с шансом 0.5 и если NumberOfAliveTerrorists=1 ставит флаг DontPlantBomb (3–5 с), и повторяет action_pull_trigger. Если флаг DontPlantBomb — смотрит по сторонам.
+bt_pickup_bomb_if_nearby	Сенсор сфера 3000, CLASSNAME weapon_c4, orphan_only → сортирует → берёт ближайшее → try_lock 'PickupBombIfNearby' → action_move_to (nearest_area_distance_threshold=20).
+bt_defuse_bomb_if_nearby	Сенсор сфера 3000, CLASSNAME planted_c4, orphan_only → сортирует → try_lock 'DefuseBombIfNearby' → идёт, смотрит, ждёт 0.25 с, повторяет action_use.
+bt_pickup_hostage	Сенсор CLASSNAME hostage_entity, orphan_only → идёт (arrival_epsilon=35), смотрит, ждёт 1 с, повторяет action_use.
+bt_pickup_hostage_if_covered	Берёт ShortTermAttackMemory → reaction time → сортирует → если ≥2 врага в EngagedEntities (CLEAR, amount=2, AT_LEAST) → bt_pickup_hostage.
+bt_clear_threats_within_fov	succeed negated=1 → если ShortTermAttackMemory пусто: берёт Threats (AllBots) → reaction time → visible → удаляет из Threats. Side-effect: очищает угрозы в FOV. Всегда failure, чтобы не останавливать selector.
+bt_select_nearby_threat	selector[succeed negated=1 → remove_key NearestThreatMemory; succeed negated=1 → Threats (AllBots) → reaction time → visible (check_fov=0) → ranker_dist → max_score → если есть: memory → NearestThreatMemory]. Всегда failure, но обновляет NearestThreatMemory.
+bt_memorize_threats	Сенсор DAMAGE → reaction time → Threats (AllBots).
+Co-op
+Модуль	Что делает
+bt_basic_player_engagement	selector[throw_utility_if_covered, attack, face_damage_inflictor, parallel[flee_area_damage_threats, repeat look_around], attack_damage_inflictor_smoke, clear_threats_within_fov, select_nearby_threat, heal_if_needed].
+bt_basic_player_memorization	parallel[memorize_enemies_vision, memorize_noises, memorize_nearest_investigation, memorize_area_damage_grenades, memorize_area_damage_infernos, memorize_damage, memorize_threats, memorize_area_damage_current].
+bt_determine_rush_center	succeed negated=1 → selector[condition_is_equal LastCoopSpawnPointName='enemy.waveXX' → parallel[set_value_vector RushCenterLocation, set_value_float RushCenterRadius]] для каждого wave. Всегда failure, но устанавливает центр раша.
+bt_throw_utility_if_covered	sequencer[preconditions (reaction time, ≥2 врага в EngagedEntities, есть hegrenade/incgrenade), maybe 0.15 → sequencer[aim_projectile (баг), equip_item, wait 0.5, look_at, pull_trigger, wait 0.5]].
+bt_guard	parallel[repeat BasicPlayerMemorization, repeat selector[BasicPlayerEngagement, Investigate (look at), Investigate (distance_less 450–550), go back to spawn + look around + maybe say "Clear" (0.7) + wait 4–8]].
+bt_roam	parallel[repeat BasicPlayerMemorization, repeat selector[BasicPlayerEngagement, Investigate, roam (choose_random_waypoint_within_radius LastCoopSpawnPointLocation 700, move_to, maybe say "Clear" (0.7), wait 1–3)]].
+bt_rush	parallel[repeat BasicPlayerMemorization, repeat selector[DetermineRushCenter, condition_is_empty RushCenterLocation → action_jump, BasicPlayerEngagement, Investigate, Rush (choose_random_waypoint_within_radius RushCenterLocation RushCenterRadius, move_to)]].
+bt_sniper	parallel[repeat BasicPlayerMemorization, repeat selector[BasicPlayerEngagement]].
+Guardian
+Модуль	Что делает
+bt_item_strategy	Покупка/выдача предметов по токенам стратегий.
+bt_takeover_strategy	Захват позиции по токенам стратегий.
+bt_attack_with_shield	Атака со щитом (аналог bt_attack, но с weapon_shield).
+bt_investigate_with_shield	Исследование со щитом.
+bt_coordinated_buy	Скоординированная покупка (с багом).
+bt_strategy_smoke, bt_strategy_grenades	Стратегии дымов/гранат (card13).
+15. Паттерны
 Восприятие + решение через parallel:
 
 text
@@ -1230,11 +575,13 @@ selector
 text
 decorator_try_lock domain = "'PressAntennaButton'"
 └── sequencer[ move_to ant.button, look_at, wait, use ]
-Скоординированная покупка (не используйте action_coordinated_buy — он сломан):
+Side-effect без остановки selector:
 
 text
-decorator_run_once domain = "'BuyPhase'"
-└── action_buy
+decorator_succeed negated = 1
+└── sequencer[ ... сделать что-то ... ]
+Selector увидит failure и пойдёт дальше, но side-effect уже выполнен.
+
 Истечение памяти в корне:
 
 text
@@ -1245,114 +592,16 @@ decorator_bot_service
     { key = "LongTermMemory"         time = 10   distance = 500 }
     { key = "ShortTermInvestigateMemory" time = 3 distance = 200 }
   ]
-11.3 Официальные деревья и модули
-Deathmatch / DM Freeforall — scripts/ai/deathmatch/bt_default.kv3
-
-Корень: decorator_bot_service → decorator_buy_service → parallel (восприятие + selector).
-
-Selector: покупка, реакция на урон, атака, лечение, исследование, охота.
-
-Arms Race — scripts/ai/armsrace/bt_default.kv3 (аналогично).
-
-Rush — scripts/ai/rush/bt_default.kv3
-
-Дополнительно: decorator_try_lock на 'PressAntennaButton', движение к ant.button, использование.
-
-Practice (New User Training) — scripts/ai/practice/newplayer_dust2_01.kv3
-
-decorator_hiding_spot_service → decorator_token_service ('StratTokens') → decorator_bot_service.
-
-В selector: ItemStrategy, Attack, FaceDamageInflictor, AttackDamageInflictorSmoke, ClearThreatsWithinFov, SelectNearbyThreat, TakeoverStrategy, проверки TeamName для закладки/разминирования, исследование, охота.
-
-Co-op (Guard, Roam, Rush, Sniper) — scripts/ai/coop/bt_guard.kv3 и др.
-
-decorator_hiding_spot_service → decorator_bot_service (с basic_chatter_enable, input_chatter_enemies).
-
-BasicPlayerMemorization, BasicPlayerEngagement, исследование, спецповедение (охрана точки, рой, снайпер).
-
-Guardian (пример op11_sirocco_2.kv3)
-
-decorator_hiding_spot_service → decorator_token_service ('StratTokens' с токенами стратегий) → decorator_bot_service.
-
-Selector: condition_inactive (самоубийство при неактивности), ItemStrategy, Attack, FaceDamageInflictor, AttackDamageInflictorSmoke, ClearThreatsWithinFov, SelectNearbyThreat, TakeoverStrategy, PlantIfCovered, PlantIfOwned, PickupBombIfNearby, HealIfNeeded, исследование, охота.
-
-Модули: bt_item_strategy, bt_takeover_strategy, bt_attack_with_shield, bt_investigate_with_shield, bt_memorize_threats, bt_clear_threats_within_fov, bt_select_nearby_threat и др.
-
-Общие модули
-
-bt_attack.kv3 — выбор цели, экипировка, позиционирование, прицеливание, атака.
-
-bt_memorize_enemies_vision.kv3 — сенсор зрения (FOV, PLAYERS, ENEMY, nearby 1500, visible, реакция, память).
-
-bt_memorize_noises.kv3 — сенсор слуха (сфера 3000, NOISE, weight_as_distance, random_by_distance, dedup, реакция, память).
-
-bt_memorize_damage.kv3 — сенсор DAMAGE → ShortTermDamageMemory и DamageThroughSmokeMemory.
-
-bt_memorize_area_damage_*.kv3 — гранаты, инферно, текущий урон.
-
-bt_memorize_nearest_investigation.kv3 — выбирает ближайшее событие из LongTermMemory в ShortTermInvestigateMemory.
-
-bt_investigate_closest_memorized_event.kv3 — идёт к событию, смотрит, ждёт.
-
-bt_heal_if_needed.kv3 — лечение при HP < 60.
-
-bt_face_damage_inflictor.kv3 — поворот к источнику урона, атака (если не в дыму).
-
-bt_attack_damage_inflictor_smoke.kv3 — атака источника урона сквозь дым.
-
-bt_flee_area_damage_threats.kv3 — бегство из зоны урона.
-
-bt_look_around.kv3 — случайный обзор.
-
-bt_plant_bomb_if_covered.kv3 — закладка при прикрытии.
-
-bt_plant_bomb_if_owned.kv3 — закладка, если есть бомба (с флагом DontPlantBomb).
-
-bt_pickup_bomb_if_nearby.kv3 — подбор бомбы.
-
-bt_defuse_bomb_if_nearby.kv3 — разминирование.
-
-bt_pickup_hostage.kv3, bt_pickup_hostage_if_covered.kv3 — захват заложника.
-
-bt_clear_threats_within_fov.kv3 — удаление угроз из общего списка, если они в FOV.
-
-bt_select_nearby_threat.kv3 — выбор ближайшей видимой угрозы в NearestThreatMemory.
-
-bt_memorize_threats.kv3 — добавление источников урона в глобальный Threats.
-
-bt_determine_rush_center.kv3 — определение центра раша по имени спавна (Co-op).
-
-bt_throw_utility_if_covered.kv3 — бросок гранаты при прикрытии.
-
-bt_basic_player_memorization.kv3, bt_basic_player_engagement.kv3 — базовые модули Co-op.
-
-12. Практические рекомендации
-12.1 С чего начать
-Извлеките официальные деревья через Source2 Viewer из pak01_dir.vpk. Изучите bt_default.kv3 (Deathmatch) и bt_practice/newplayer_dust2_01.kv3 — это лучшие образцы.
-
-Не пытайтесь «портировать» C++ логику. Думайте в терминах узлов, blackboard и приоритетов.
-
-Начните с простого дерева и итеративно усложняйте.
-
-12.2 Чего избегать
+16. Подводные камни
 ❌ Не делайте	✅ Делайте вместо этого
 Полагаться на acquire_only, ratio, distance_threshold	Эти параметры игнорируются
-Использовать action_coordinated_buy	decorator_run_once + action_buy
+Использовать action_coordinated_buy без decorator_run_once	decorator_run_once + action_buy
 Забывать mp_bot_ai_bt_clear_cache	Всегда чистить кэш после правок
 Передавать float/bool в subtree params	Только int или string
-Использовать 16 строк в attack (CS2)	Ровно 13, в фиксированном порядке
+Использовать 20 строк в attack для CS2 Deathmatch	Ровно 13, в фиксированном порядке
 Ожидать, что action_aim разскопится	Смените оружие или экипируйте то же заново
 Полагаться на condition_is_greater/is_less	Используйте greater_equal/less_equal
-12.3 Проверка «мёртвых» параметров
-Создайте два дерева: с параметром и без.
-
-Запустите cv_bot_ai_bt_debug_target на боте.
-
-Сравните поведение. Если разницы нет — параметр мёртв.
-
-Источники
-Source2 Wiki: Bot behavior trees
-
-Valve Developer Community: CS:GO Bot Behavior Trees
-
-Предоставленные KV3-файлы: конфиги (CS:GO и CS2), деревья Deathmatch, Arms Race, Rush, Practice, Co-op, Guardian, модули.
+Использовать decorator_invert в CS2	Используйте negated = 1
+Забывать, что action_attack без ready стреляет сразу	Указывайте ready, если нужна синхронизация с action_aim
+Ожидать, что action_aim_projectile точно бросит гранату	Баг: не учитывает траекторию
+Использовать decorator_picker_blocked_by_smoke без понимания	Он оставляет только сущности за дымом
