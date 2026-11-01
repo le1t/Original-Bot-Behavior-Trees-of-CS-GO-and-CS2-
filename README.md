@@ -2,8 +2,16 @@
 
 > **Note**
 >
-> Практическое руководство по KV3-деревьям поведения ботов в Counter-Strike: Global Offensive и Counter-Strike 2. Основано на официальных дампах KV3-файлов и страницах Valve Developer Community / Source2 Wiki.
+> Практическое руководство по KV3-деревьям поведения ботов в Counter-Strike: Global Offensive и Counter-Strike 2. Основано на официальных дампах KV3-файлов (CS:GO — 544 файла, CS2 — 57 файлов) и страницах Valve Developer Community / Source2 Wiki.
 >
+> **Происхождение данных.** Разделы про Guardian и Co-op основаны на **CS:GO-дампах** — в CS2-дампе Guardian/Co-op-деревьев нет вообще. Разделы про Practice, Rush, Arms Race и Deathmatch — на **CS2-дампах**. CS2 All-in-One неполный (57 файлов против 544) и содержит только armsrace, deathmatch, practice, rush и общие модули. Не смешивайте игры при будущих правках.
+
+### 🏷️ Легенда статусов
+
+| Значок | Смысл |
+|---|---|
+| ✅ | Подтверждено дампами и/или документацией |
+| ⚠️ | Не встречается в дампах, игнорируется движком или не подтверждено официально |
 
 ---
 
@@ -37,11 +45,18 @@
 - [17. Скриптовые установки гранат](#17-скриптовые-установки-гранат)
 - [18. Координация через глобальные счётчики](#18-координация-через-глобальные-счётчики)
 - [19. Паттерны-предохранители](#19-паттерны-предохранители)
-- [20. Парашют (CS2 Blacksire)](#20-парашют-cs2-blacksire)
+- [20. Парашют (Blacksite, CS:GO Guardian)](#20-парашют-blacksite-csgo-guardian)
 - [21. Карты Guardian](#21-карты-guardian)
 - [22. Practice: полная таблица раундов](#22-practice-полная-таблица-раундов)
 - [23. Полный список доменов](#23-полный-список-доменов)
 - [24. Быстрый справочник: aim_projectile vs throw_utility](#24-быстрый-справочник-aim_projectile-vs-throw_utility)
+
+### Часть VI. Приложения
+- [25. Инвентарь узлов и частоты](#25-инвентарь-узлов-и-частоты)
+- [26. Мёртвые ключи и неиспользуемые узлы](#26-мёртвые-ключи-и-неиспользуемые-узлы)
+- [27. Анти-паттерны](#27-анти-паттерны)
+- [28. Известные баги движка](#28-известные-баги-движка)
+- [29. Чтение дампов, структура файлов и история](#29-чтение-дампов-структура-файлов-и-история)
 
 ---
 
@@ -58,8 +73,18 @@
 | Деревья и модули | `scripts/ai/...` внутри `game/csgo/pak01_dir.vpk`, извлекаются Source2 Viewer |
 | Своё дерево | `scripts/ai/mymode/bt_default.kv3` |
 | Конфиг | `scripts/ai/<mode>/bt_config.kv3` |
+| Per-spawn дерево (CS:GO Co-op Strike) | ключ `behavior_tree_file` на `info_enemy_terrorist_spawn` — назначает дерево конкретной спавн-энтити |
 
-**1.3.** В предоставленных дампах файлы названы `.txt`, но в игре используются `.kv3`. Внутри — KV3-разметка.
+**1.2.1.** Инвентарь дампов (что где лежит):
+
+| Игра | Содержимое |
+|---|---|
+| CS:GO (544 файла) | guardian — 519 (все op09/op10/op11 + модули), coop/autumn — 9, modules — 14, deathmatch — 2 |
+| CS2 (57 файлов) | armsrace — 2, deathmatch — 2, modules — 14, practice — 30, rush — 2, плюс конфиги и служебные файлы |
+
+Все 51 guardian-корень ссылаются на `scripts/ai/guardian/bt_config.kv3`; coop — на `scripts/ai/coop/bt_config.kv3`. Полное дерево папок — в [§29](#29-чтение-дампов-структура-файлов-и-история).
+
+**1.3.** В предоставленных дампах файлы названы `.txt`, но в игре используются `.kv3`. Внутри — KV3-разметка. Как читать «склеенные» All-in-One-дампы — см. [§29](#29-чтение-дампов-структура-файлов-и-история).
 
 **1.4.** Как включить:
 
@@ -79,26 +104,28 @@ mp_restartgame 1
 
 **1.6.** Официальные режимы:
 
-| Режим | Дерево | Строк в attack (CS2) | Строк в attack (CS:GO) |
+| Режим | Игра | Дерево | Строк в attack |
 |---|---|---|---|
-| Deathmatch / DM Freeforall | `scripts/ai/deathmatch/bt_default.kv3` | 13 | **20** |
-| Arms Race | `scripts/ai/armsrace/bt_default.kv3` | 13 | 20 |
-| Rush | `scripts/ai/rush/bt_default.kv3` | 13 | 20 |
-| New User Training | `scripts/ai/practice/newplayer_dust2_01.kv3` | 13 (отдельный конфиг `practice/bt_config.kv3`) | 20 |
-| Co-op (Guard/Roam/Rush/Sniper) | `scripts/ai/coop/bt_*.kv3` | 20 | 20 |
-| Guardian | `scripts/ai/guardian/bt_op*.kv3` | 20 | 20 |
+| Deathmatch / DM Freeforall | CS2 и CS:GO | `scripts/ai/deathmatch/bt_default.kv3` | 13 (CS2) / **20** (CS:GO) |
+| Arms Race | только CS2 | `scripts/ai/armsrace/bt_default.kv3` | 13 |
+| Rush | только CS2 | `scripts/ai/rush/bt_default.kv3` | 13 |
+| New User Training (Practice) | только CS2 | `scripts/ai/practice/newplayer_dust2_01.kv3` | 13 (отдельный конфиг `practice/bt_config.kv3`) |
+| Co-op (Guard/Roam/Rush/Sniper) | только CS:GO | `scripts/ai/coop/bt_*.kv3` | **20** |
+| Guardian | только CS:GO | `scripts/ai/guardian/bt_op*.kv3` | **20** |
 
 > **Important**
 >
-> CS2: Deathmatch/Rush/Practice/Arms Race — ровно **13** строк в `attack`; Co-op/Guardian — **20**. CS:GO: во **всех** конфигах (coop, deathmatch, guardian) — **20** строк. Если перепутать, будет:
+> CS2: **все** официальные конфиги (armsrace, deathmatch, practice, rush) байт-идентичны (совпадает md5) и содержат ровно **13** строк в `attack`. Guardian/Co-op-деревьев и конфигов в CS2-дампе **нет**; если такие режимы есть в игре, их параметры дампами не подтверждены. 20-строчный конфиг в CS2 просто не загрузится:
 >
 > ```
 > [AI BT]: Config node 'attack' must contain 13 entries
 > ```
 >
-> ⚠️ У Practice отдельный конфиг `scripts/ai/practice/bt_config.kv3` (в дампах — `scripts\ai\practice\bt_config.txt`). В CS2 он байт-идентичен deathmatch-конфигу. В CS:GO отдельного practice-конфига в дампах нет — используется deathmatch с 20 строками.
+> CS:GO: во **всех** трёх конфигах (coop, deathmatch, guardian) — **20** строк. В CS:GO BT использовались только в Co-op Strike, Guardian и Deathmatch (Arms Race, Rush и Practice — чисто CS2-режимы, отдельных CS:GO-деревьев для них в дампах нет).
 >
-> ⚠️ CS:GO-конфиги (coop, deathmatch, guardian) **не идентичны между собой**: coop и deathmatch различаются `look_around_*` (например, для `low`: `0.65/0.1/0.5` против `0.9/0.4/0.6`), guardian отличается строкой RIFLE (см. §4.6.4). В CS2 все 4 конфига (armsrace, deathmatch, practice, rush) байт-идентичны.
+> ⚠️ У Practice отдельный конфиг `scripts/ai/practice/bt_config.kv3` — в CS2 он байт-идентичен остальным трём CS2-конфигам.
+>
+> ⚠️ CS:GO-конфиги **не идентичны между собой**: coop и deathmatch различаются только `look_around_*` (для `low`: `0.65/0.1/0.5` против `0.9/0.4/0.6`), а guardian — это отдельный «замедленный» конфиг, отличающийся почти всем (см. §4.6.4), а не только строкой RIFLE.
 
 ---
 
@@ -195,7 +222,7 @@ mp_restartgame 1
 
 > **Warning**
 >
-> Не «исправляйте» `domain = "'PressAntennaButton'"` на `domain = "PressAntennaButton"` без проверки. В предоставленных файлах для `decorator_try_lock`, `decorator_token_service`, `decorator_run_once`, `action_set_global_counter` и т.п. используются именно строки с внутренними одинарными кавычками. При этом `decorator_hiding_spot_service domain = "AllBots"` и `memory_to_expire { domain = "AllBots" }` — **без** внутренних кавычек. Единственное исключение из правила — `decorator_run_once domain = "'AllBots'"` (**с** кавычками!) в `op11_county_2`, волна 1, перед `action_entity_accept_input` для дверей.
+> Не «исправляйте» `domain = "'PressAntennaButton'"` на `domain = "PressAntennaButton"` без проверки. В предоставленных файлах для `decorator_try_lock`, `decorator_token_service`, `decorator_run_once`, `action_set_global_counter` и т.п. используются именно строки с внутренними одинарными кавычками. При этом `decorator_hiding_spot_service domain = "AllBots"` и `memory_to_expire { domain = "AllBots" }` — **без** внутренних кавычек. Единственное исключение из правила — `decorator_run_once domain = "'AllBots'"` (**с** кавычками!) в `op11_county_2`, волна 1, перед `action_entity_accept_input` для дверей: так только **один** бот нажимает все кнопки дверей Creek, а не все пять одновременно.
 
 **3.5.** Пример subtree-файла:
 
@@ -246,6 +273,10 @@ mp_restartgame 1
 | `aim_max_duration_deviation` | float | Разброс макс. времени |
 | `aim_punch_angle_reaction_chance` | float | Шанс реакции на отдачу |
 
+> **Note**
+>
+> `aim_ready_angle_tolerance` отсутствует в старой CS:GO-вики, но **есть во всех CS:GO-конфиг-файлах**: 3.0 в coop/deathmatch, 5.0 в guardian (4.5 на уровне `hard`). Это не «CS2-новинка», а просто пробел старой документации.
+
 ### 4.4. Параметры осмотра
 
 | Ключ | Описание |
@@ -279,7 +310,7 @@ mp_restartgame 1
 | `cooldown` | Пауза между очередями |
 | `cooldown deviation` | Разброс паузы |
 
-**4.6.2.** 13 строк — CS2 Deathmatch / Rush / Practice / Arms Race. Строгий порядок:
+**4.6.2.** **13 строк** — все конфиги CS2 (Deathmatch / Rush / Practice / Arms Race; все четыре байт-идентичны). Строгий порядок:
 
 | # | Тип |
 |---|---|
@@ -297,23 +328,42 @@ mp_restartgame 1
 | 12 | STACKABLEITEM |
 | 13 | UNKNOWN |
 
-**4.6.3.** 20 строк — CS2 Co-op / Guardian, а также все CS:GO-конфиги. Те же 13 + ещё 7:
+**4.6.3.** **20 строк** — все три конфига CS:GO (coop, deathmatch, guardian). Ровно 20; порядок: 12 базовых типов CS2 (KNIFE…STACKABLEITEM) + 7 специфичных для старых режимов + UNKNOWN последней, на 20-й позиции:
 
 | # | Тип |
 |---|---|
-| 14 | FISTS |
-| 15 | BREACHCHARGE |
-| 16 | BUMPMINE |
-| 17 | TABLET |
-| 18 | MELEE |
-| 19 | SHIELD |
-| 20 | WEAPONTYPE_ZONE_REPULSOR + UNKNOWN (две строки подряд — фактически 21-я) |
+| 1–12 | KNIFE … STACKABLEITEM (как в CS2, но без UNKNOWN) |
+| 13 | FISTS |
+| 14 | BREACHCHARGE |
+| 15 | BUMPMINE |
+| 16 | TABLET |
+| 17 | MELEE |
+| 18 | SHIELD |
+| 19 | WEAPONTYPE_ZONE_REPULSOR |
+| 20 | UNKNOWN |
 
-**4.6.4.** Пример RIFLE:
+> **Note**
+>
+> В CS2 UNKNOWN — 13-я строка; в CS:GO она сдвинута на 20-ю позицию. Итог везде ровно 20 строк — никакой «фактически 21-й» нет.
+
+**4.6.4.** Guardian отличается от deathmatch/coop **не только строкой RIFLE, а почти всем** — это отдельный «замедленный» конфиг:
+
+| Ключ | Co-op / Deathmatch (CS:GO) | Guardian (CS:GO) |
+|---|---|---|
+| `aim_target_acquisition_lerp_time` | 0.5 | 0.8 |
+| `aim_target_acquisition_angle_penalty` | 5 | 10 |
+| `aim_ready_angle_tolerance` | 3 | 5 (на `hard` — 4.5) |
+| `aim_new_target_angle_tolerance` | 30 | 45 |
+| `aim_max_duration` | 1.1 | 1.2 |
+| `reaction_time` | 0.5 | 0.85 |
+| `look_around_*` | значения deathmatch | отличия по всем ключам |
+| строка RIFLE (все уровни скилла) | `[ 0.22, 0.07, 0.0, 0.45, 0.15 ]` | `[ 0.25, 0.55, 0.0, 0.95, 0.25 ]` и т.п. (0.65/0.55/0.30…) |
+
+**4.6.5.** Пример RIFLE:
 
 | Конфиг | Значение | Интерпретация |
 |---|---|---|
-| CS2 Deathmatch / Rush / Practice / Arms Race (все идентичны) | `[ 0.22, 0.07, 0.0, 0.45, 0.15 ]` | Очередь ~0.22 с, без паузы внутри, новая очередь через 0.45 с |
+| CS2 (все 4 конфига идентичны) | `[ 0.22, 0.07, 0.0, 0.45, 0.15 ]` | Очередь ~0.22 с, без паузы внутри, новая очередь через 0.45 с |
 | CS:GO Guardian (уровень `default`) | `[ 0.25, 0.55, 0.0, 0.95, 0.25 ]` | Очередь ~0.25 с, очень большой разброс, cooldown 0.95 с |
 | CS:GO Co-op / Deathmatch | `[ 0.22, 0.07, 0.0, 0.45, 0.15 ]` | Идентично CS2-конфигу |
 
@@ -329,29 +379,47 @@ mp_restartgame 1
 
 | Узел | Ключи | Что делает |
 |---|---|---|
-| `parallel` | `succeed_after_first` (bool), `children` | Запускает всех детей каждый тик. Провал любого = провал всего. Успех = все дети успешны, либо первый успешный при `succeed_after_first = 1` |
+| `parallel` | `succeed_after_first` (bool), `children` | Запускает всех детей каждый тик. Провал любого = провал всего. Успех = все дети успешны, либо первый успешный при `succeed_after_first = 1`. `succeed_after_first = 1` реально используется — единственное место в дампах: `op09_grunts_card2/bt_strat_hold_position` (2×) |
 | `selector` | `children` | Список приоритетов. Проверяет детей с первого каждый тик. Первый прошедший запускается. Если более ранний ребёнок начал проходить — текущий останавливается |
 | `sequencer` | `children` | Выполняет детей по порядку. Провал любого = стоп. Успех = все прошли. Check-pass смотрит только на текущего ребёнка; пройденные условия не перепроверяются |
 | `subtree` | `file`, `name`, `params` | Запускает другое дерево из файла. `params` пишут значения в blackboard до старта. Только int или string; float/bool отвергаются. Имена ключей регистронезависимы |
 
-**5.1.** Пример `subtree` с параметрами:
+**5.1.** `subtree` с параметрами — это **не мёртвый синтаксис**: в CS:GO-дампе ровно **15 использований** `params`, все в `op09_grunts_card2` — `bt_strat_lobby` (×6), `bt_strat_heaven` (×3), `bt_strat_outside` (×6) передают параметры в `bt_strat_hold_position.kv3`:
+
+| Ключ параметра | Тип значения | Пример |
+|---|---|---|
+| `StratCounter` | int | `1` |
+| `HoldDestination` | vector строкой | `"85.5 -749.55 -351.91"` |
+| `HoldApproachPoint` | vector строкой | аналогично |
+| `HoldAngles` | vector строкой | аналогично |
+| `IntermediateWaypoint` | vector строкой | аналогично |
+| `ThrowUtility` | строка-литерал | `"'LobbyRushSite'"` |
+
+Схематически (по дампу card2):
 
 ```kv3
-{
-    type = "subtree"
-    file = "scripts/ai/mymode/bt_goto.kv3"
-    name = "GotoA"
-    params =
-    [
-        { key = "Target" value = "site_a_target" }
-        { key = "WaitTime" value = 3 }
-    ]
-}
+type = "subtree"
+file = ".../op09_grunts_card2/bt_strat_hold_position.kv3"
+name = "..."
+params =
+[
+    { key = "StratCounter" value = 1 }
+    { key = "HoldDestination" value = "85.5 -749.55 -351.91" }
+    { key = "ThrowUtility" value = "'LobbyRushSite'" }
+]
 ```
+
+Это целый официальный паттерн Valve — **«параметризованное удержание позиции»**: одна стратегия `bt_strat_hold_position` переиспользуется с разными позициями/углами/точками подхода для lobby, heaven и outside.
 
 > **Warning**
 >
-> `params =` **не встречается ни в одном** из 57 CS2-дампов и 544 CS:GO-дампов. Синтаксис взят из Source2 Wiki и не подтверждён на официальных деревьях. Используйте только `int`/`string`; при `float`/`bool` движок выдаст `[AI BT]: unsupported type for subtree parameter`.
+> В `params` можно передавать только `int` и `string` (векторы — строкой). `float`/`bool` дают ошибку:
+>
+> ```
+> [AI BT]: unsupported type for subtree parameter
+> ```
+>
+> В CS2-дампе `params` не встречается вовсе; официальный образец — только CS:GO Guardian (`op09_grunts_card2`).
 
 ---
 
@@ -382,7 +450,7 @@ mp_restartgame 1
 | `domain = "AllBots"` | Все боты делят состояние укрытий |
 | `output_hiding_spot = "HidingSpot"` | Ключ blackboard, куда пишется выбранное укрытие |
 | `distance_threshold = 800` | Максимальная дистанция до укрытия |
-| `expiration_time` | Сколько секунд укрытие считается «занятым/проверенным». `10` в Co-op, `15` — в трёх корнях (см. §21.2) |
+| `expiration_time` | Сколько секунд укрытие считается «занятым/проверенным». `10` в Co-op и почти всех корнях Guardian, `15` — ровно в трёх корнях (см. §21.2) |
 
 `action_move_to hiding_spot = "HidingSpot"` заставляет бота двигаться **от укрытия к укрытию** (cover-to-cover), а не по прямой. Это ключевой паттерн для Co-op/Guardian.
 
@@ -394,15 +462,15 @@ mp_restartgame 1
 | `decorator_picker_visible` | `check_fov` (bool, по умолчанию 1) | Убирает невидимые сущности. `check_fov = 0` — игнорирует FOV | ✅ |
 | `decorator_picker_reaction_time` | — | Задерживает выход на `reaction_time` бота | ✅ |
 | `decorator_picker_dedup` | `against` (string), `distance_threshold` (float) | Убирает дубликаты — сущности ближе `distance_threshold` к сущностям из `against` | ✅ |
-| `decorator_picker_random_by_distance` | `distance_min` (float), `distance_max` (float) | Вероятностный фильтр по дистанции | ✅ |
+| `decorator_picker_random_by_distance` | `distance_min` (float), `distance_max` (float) | **Вероятностный** фильтр по дистанции: сущности ближе к `distance_min` удаляются реже, ближе к `distance_max` — чаще. Не жёсткий порог. Важно для `bt_memorize_noises` | ✅ |
 | `decorator_picker_weight_as_distance` | — | Убирает сущности, чья дистанция больше их «веса» | ✅ |
-| `decorator_picker_grenade_type` | `types[]` (FLASH, FIRE, EXPLOSIVE, DECOY, SMOKE) | Фильтр гранат по типу | ✅ |
+| `decorator_picker_grenade_type` | `types[]` (FLASH, FIRE, EXPLOSIVE, DECOY, SMOKE; по старой CS:GO-вике дополнительно SENSOR и SNOWBALL) | Фильтр гранат по типу | ✅ |
 | `decorator_picker_blocked_by_smoke` | `distance_threshold` (float) | Оставляет только сущности за дымом | ⚠️ `distance_threshold` в файлах есть, но по вики игнорируется |
-| `decorator_picker_max_score` | — | Берёт сущность с **максимальным score** (не «первую»). Если перед ним `decorator_ranker_dist` — score обратно пропорционален дистанции, т.е. берётся ближайшая | ✅ |
+| `decorator_picker_max_score` | — | Берёт сущность с **максимальным score**. Если перед ним `decorator_ranker_dist` — score обратно пропорционален дистанции, т.е. берётся ближайшая. **Без ранкера** score у всех одинаковый (0/1), и берётся **первая** сущность массива (порядок появления на сервере) — не «случайная» и не «лучшая». Частая ошибка новичков | ✅ |
 
 > **Note**
 >
-> `decorator_picker_max_score` выбирает сущность с **наивысшим score**, который задаётся предыдущими пикерами/ранкерами. `decorator_ranker_dist` присваивает score обратно пропорционально дистанции (ближе = выше score). Без ранкера score у всех одинаковый, и берётся первая.
+> `decorator_picker_max_score` выбирает сущность с **наивысшим score**, который задаётся предыдущими пикерами/ранкерами. `decorator_ranker_dist` присваивает score обратно пропорционально дистанции (ближе = выше score). Всегда ставьте ранкер перед `max_score`, если нужна осмысленная выборка.
 
 ### 6.4. Ранкеры
 
@@ -416,6 +484,10 @@ mp_restartgame 1
 |---|---|---|---|
 | `decorator_sensor` | `output` (string), `class_name` (string), `priority` (int), `orphan_only` (bool), `append_items` (bool), `entity_type_filter` (enum), `team_filter` (enum), `attacker_filter` (enum), `shape` (`{type, radius}`), `child` | Сканирует мир и записывает найденные сущности в `output`. `shape`: `sensor_shape_fov` или `sensor_shape_sphere` с `radius`. `orphan_only = 1` — только «бесхозные». `append_items = 1` — добавить к списку | ✅ кроме `attacker_filter` ⚠️; `append_items` — только CS2 |
 
+> **Warning**
+>
+> Известный баг: при фильтрации гранат с `team_filter = "ENEMY"` сенсор ошибочно возвращает гранаты T-команды независимо от команды бота. Обходной путь (подтверждён Valve Developer Community) — использовать `OPPOSITE`.
+
 ### 6.6. Память
 
 | Узел | Ключи | Что делает | Статус |
@@ -427,7 +499,7 @@ mp_restartgame 1
 
 | Узел | Ключи | Что делает | Статус |
 |---|---|---|---|
-| `decorator_repeat` | `amount` (int), `child` | Перезапускает ребёнка каждый раз, когда он завершается. Без `amount` — вечно. С `amount = N` — N раз | ✅ `amount` ⚠️ |
+| `decorator_repeat` | `amount` (int), `child` | Перезапускает ребёнка каждый раз, когда он завершается. Без `amount` — вечно. С `amount = N` — N раз | ✅ `amount` ⚠️ не встречается ни разу (все 7 вхождений `amount` в дампах — это `decorator_tag_threshold amount = 2`) |
 | `decorator_maybe` | `chance` (float, 0–1), `child` | Выполняет ребёнка с вероятностью `chance` | ✅ |
 | `decorator_succeed` | `negated` (bool), `child` | Без `negated`: всегда проходит check-pass, после ребёнка возвращает success. С `negated = 1`: всегда проходит check-pass, после ребёнка возвращает failure | ✅ |
 | `decorator_invert` | `child` | Инвертирует check-результат. В CS2 вместо него используют `negated = 1` | ⚠️ не встречен |
@@ -477,7 +549,7 @@ operation_type = "BT_DECORATOR_TAG_ENTITY_SET"
 expiration_time = 1
 ```
 
-Тег живёт 1 секунду, потом автоматически снимается. Это позволяет `bt_plant_bomb_if_covered` проверять «есть ли ≥2 врага, с которыми мы реально воюем прямо сейчас». Без `expiration_time` тег висел бы вечно.
+Тег живёт 1 секунду, потом автоматически снимается. Это позволяет `bt_plant_bomb_if_covered` проверять «есть ли ≥2 врага, с которыми мы реально воюем прямо сейчас». Без `expiration_time` тег висел бы вечно — см. анти-паттерн «утечка тегов» в [§27](#27-анти-паттерны).
 
 **6.8.2.** `decorator_tag_entity` + `BT_DECORATOR_TAG_ENTITY_CLEAR` — что это:
 
@@ -507,8 +579,12 @@ assignments =
 
 | Поле | Смысл |
 |---|---|
-| `assignments` | Массив **вариантов раздачи**. Движок выбирает один (вероятно, случайно) |
+| `assignments` | Массив **вариантов раздачи**. Движок перебирает массив сверху вниз и берёт **первый** вариант, у которого сумма чисел совпадает с количеством ботов в команде и соблюдены `team_restriction`. Если подходящего варианта нет (например, на сервере 3 бота, а варианты только на 5 и 6) — токены не выдаются, `GroupId` остаётся пустым |
 | `team_restriction` | Массив, **параллельный** `tokens`. `team_restriction[i]` ограничивает `tokens[i]` указанной командой |
+
+> **Note**
+>
+> Источник примера выше — `op09_grunts_card2` (**не** card12). В `op09_grunts_card12` другие токены: `StratAtrium`, `StratLobby`, `StratUpOffice` (3 токена, 6 вариантов раздачи). Пример с 9 токенами — `op10_ancient_a` (`CoverSmoke` … `LongAwp`) × 5 вариантов раздачи. В Practice — `assignments = [[1,1,1,1,1,1,1,1,1,1]]` (по одному боту на токен).
 
 Пример `team_restriction` из `newplayer_dust2_01.kv3`:
 
@@ -517,8 +593,6 @@ tokens = [ "t_1", "t_2", "t_3", "t_4", "t_5", "ct_1", "ct_2", "ct_3", "ct_4", "c
 team_restriction = [ "T", "T", "T", "T", "T", "CT", "CT", "CT", "CT", "CT" ]
 ```
 
-Источник примера `StratLobby/...` из §6.8.3 — `op09_grunts_card12`. Пример с 9 токенами — `op10_ancient_a` (`CoverSmoke` … `LongAwp`) × 5 вариантов раздачи. В Practice — `assignments = [[1,1,1,1,1,1,1,1,1,1]]` (по одному боту на токен).
-
 ### 6.9. Прочие декораторы
 
 | Узел | Ключи | Что делает | Статус |
@@ -526,6 +600,7 @@ team_restriction = [ "T", "T", "T", "T", "T", "CT", "CT", "CT", "CT", "CT" ]
 | `decorator_find_utility_strat` | `distance_threshold` (float), `input_location`, `output_location`, `output_angles`, `output_weapon`, `utilities` (`{x, y, z, ang_pitch, ang_yaw, ang_roll, weapon}[]`), `child` | Предположительно ищет позицию для утилиты. Не используется | ⚠️ не встречен |
 | `decorator_route_service` | `config` (`{routes: waypoint[][], strategies: int[][]}`), `output_waypoint`, `output_waypoint_name`, `output_domain`, `child` | Предположительно управляет маршрутами. Не используется | ⚠️ не встречен |
 | `decorator_set_barrier` | ключи не документированы | Не используется | ⚠️ не встречен |
+| `decorator_game_event` | — | Узел из старой CS:GO-вики (с пометкой самого сообщества «не существует в коде?»). В дампах отсутствует; приведён для полноты | ⚠️ существование под вопросом |
 
 ---
 
@@ -537,7 +612,7 @@ team_restriction = [ "T", "T", "T", "T", "T", "CT", "CT", "CT", "CT", "CT" ]
 |---|---|---|---|
 | `condition_is_empty` | `input` (string), `global` (bool), `negated`, `child` | Проверяет, пуст ли ключ или его нет. `global = 1` — глобальный флаг | ✅ |
 | `condition_is_equal` | `source` (string), `destination` (int или string), `domain` (string), `negated`, `child` | Проверяет равенство. `destination` может быть числом или строкой, включая `"'ct_1'"`. Незадокументированный ключ `domain` — см. §21.2.1 | ✅ |
-| `condition_is_greater_equal` | `source`, `destination`, `negated`, `child` | `source >= destination` | ✅ |
+| `condition_is_greater_equal` | `source`, `destination`, `negated`, `child` | `source >= destination`. Примеры: `GuardianWaveNumber >= 5` (`op11_county_2/bt_bot_1..5`), `RoundNumber >= 4` (practice) | ✅ |
 | `condition_is_less_equal` | `source`, `destination`, `negated`, `child` | `source <= destination` | ✅ |
 | `condition_is_greater` | `source`, `destination`, `negated`, `child` | `source > destination` | ⚠️ не встречен |
 | `condition_is_less` | `source`, `destination`, `negated`, `child` | `source < destination` | ⚠️ не встречен |
@@ -547,12 +622,16 @@ team_restriction = [ "T", "T", "T", "T", "T", "CT", "CT", "CT", "CT", "CT" ]
 | `condition_owns_item` | `item` (string), `items_one_of` (string[]), `negated`, `child` | Есть ли предмет | ✅ |
 | `condition_is_at_bomb_site` | `negated`, `child` | Бот на бомбсайте | ✅ |
 | `condition_distance_less` | `input` (string), `distance_threshold_min` (float), `distance_threshold_max` (float), `negated`, `child` | Дистанция до `input` меньше случайного порога между min и max. **При `negated = 1` — «дистанция НЕ меньше порога», т.е. враг далеко** | ✅ |
-| `condition_has_parachute` | `negated`, `child` | Есть ли парашют | ✅ |
+| `condition_has_parachute` | `negated`, `child` | Есть ли парашют | ✅ (только CS:GO Guardian, Blacksite) |
 | `condition_inactive` | `input` (`{key}[]`), `round_start_threshold_seconds` (float), `sensor_inactivity_threshold_seconds` (float), `negated`, `child` | Нет активности в указанных ключах заданное время и с начала раунда прошло не меньше порога | ✅ |
 | `condition_is_airborne` | `negated`, `child` | Бот в воздухе | ✅ |
 | `condition_is_reloading` | `negated`, `child` | Оружие перезаряжается | ⚠️ не встречен |
-| `condition_is_weapon_suitable` | `input`, `weapon`, `negated`, `child` | Подходит ли оружие для дистанции до `input` | ⚠️ не встречен |
+| `condition_is_weapon_suitable` | `input`, `weapon`, `negated`, `child` | Подходит ли оружие для дистанции до `input`. ⚠️ По Valve Developer Community работает (с багом) как `condition_is_weapon_equipped` | ⚠️ не встречен |
 | `condition_barrier` | `input_domain`, `input_name`, `radius`, `negated`, `child` | — | ⚠️ не встречен |
+
+> **Note**
+>
+> Незадокументированный ключ `domain` достоверно используется у `condition_is_equal` (40× в `bt_parachute_1`). По утверждению сообщества он работает и у `condition_is_greater_equal`, `condition_is_less_equal`, `condition_is_empty` — дампами это не подтверждено, используйте с осторожностью.
 
 **7.2.** `condition_distance_less` с `negated = 1` — семантика:
 
@@ -581,18 +660,27 @@ negated = 1
 | `action_move_to` | `destination`, `hiding_spot`, `threat`, `auto_look_adjust`, `damaging_areas_penalty_cost`, `arrival_epsilon`, `additional_arrival_epsilon_2d`, `hiding_spot_check_distance_threshold`, `nearest_area_distance_threshold`, `movement_type`, `route_type` | Ведёт бота к `destination`. `movement_type`: WALK/RUN. `route_type`: FASTEST_ROUTE. `destination` — позиция, ключ blackboard или targetname | ✅ |
 | `action_combat_positioning` | `input` (string), `is_attacking` (string) | Уклонение/сближение. Читает `is_attacking` (флаг из `action_attack output="Attacking"`) и не даёт боту стоять на месте во время перестрелки. Единственный узел «микро» в бою, кроме `combat_crouch_chance` и `combat_dodge_command_duration` из конфига | ✅ |
 | `action_flee_area_damage` | `input` (string), `output` (string), `max_search_range` (float), `threat_min_keep_distance` (float) | Ищет безопасную точку от урона по площади. `threat_min_keep_distance` — минимальная дистанция, на которую нужно отбежать **от угрозы**, а не от зоны урона | ✅ |
-| `action_jump` | — | Прыжок | ✅ |
+| `action_jump` | — | Прыжок. Помимо fallback в Co-op rush, ядро **jump-throw паттерна** в 25 CS:GO-файлах (утилити-стратегии op10/op11 — см. §15.12) | ✅ |
 | `action_crouch` | — | Присесть | ✅ (`op09_grunts_card2`, `op10_engage_b/bt_boost_molly`) |
-| `action_teleport` | `destination` (position) | Телепорт | ✅ |
-| `action_parachute_positioning` | — | Движение по диагонали для парашюта | ✅ |
-| `action_hide` | `output` (string), `max_range` (float) | Случайное укрытие. **Не встречен.** В CS2 используйте `decorator_hiding_spot_service` + `action_move_to hiding_spot` | ⚠️ не встречен |
+| `action_teleport` | `destination` (position) | Телепорт. ⚠️ Не сбрасывает `auto_look_adjust` и не влияет на камеру — для точных углов после телепорта ставьте явный `action_look_at` | ✅ |
+| `action_parachute_positioning` | — | Движение по диагонали для парашюта; периодически меняет направление (каждые несколько секунд) | ✅ (только CS:GO Guardian, Blacksite) |
+| `action_hide` | `output` (string), `max_range` (float) | Случайное укрытие. **Не встречен.** Используйте `decorator_hiding_spot_service` + `action_move_to hiding_spot` | ⚠️ не встречен |
 | `action_standup` | — | Встать | ⚠️ не встречен |
+
+**8.2.1.** `hiding_spot` и `threat` у `action_move_to` — влияние на pathfinding:
+
+| Ключ | Смысл |
+|---|---|
+| `hiding_spot = "HidingSpot"` | Бот строит маршрут **от укрытия к укрытию** (cover-to-cover), а не по прямой линии — критично для выживания |
+| `threat = "NearestThreatMemory"` | Алгоритм pathfinding активно избегает нав-тайлов, близких к указанной угрозе (если это возможно без значительного удлинения маршрута) |
 
 > **Note**
 >
 > `BT_ACTION_MOVETO_SAFEST_ROUTE` **не используется ни разу** — только `BT_ACTION_MOVETO_FASTEST_ROUTE`. Движение — только `RUN` / `WALK`.
 >
-> `damaging_areas_penalty_cost`, `additional_arrival_epsilon_2d`, `hiding_spot_check_distance_threshold` встречаются только в CS:GO-дампах.
+> `damaging_areas_penalty_cost`, `additional_arrival_epsilon_2d`, `hiding_spot_check_distance_threshold` встречаются только в CS:GO-дампах (Guardian); в CS2-дампе файлов с ними нет (примеры: `op10_ancient_a/bt_cover_smoke`, `op09_grunts_card7_2/bt_a_setup_smoke_only_1`, `op09_grunts_card6_2/bt_takeover_strategy` — все это CS:GO Guardian).
+>
+> ⚠️ Баг: после `action_jump` тип движения сбрасывается на `RUN`, даже если был `WALK` (подтверждено Valve Developer Community).
 
 ### 8.3. Прицеливание и стрельба
 
@@ -600,21 +688,21 @@ negated = 1
 |---|---|---|---|
 | `action_aim` | `input` (position), `ready` (string) | Поворачивает бота к точке `input`. Когда прицел готов — ставит флаг `ready`. `acquire_only` в файлах передаётся, но по вики игнорируется. **Не разскопится со снайперки до смены оружия** | ✅ |
 | `action_attack` | `input` (string), `ready` (string), `output` (string) | Стреляет по `input`, когда `ready` истинно. Если `ready` не указан — стреляет сразу. `output = true`, пока идёт атака | ✅ |
-| `action_pull_trigger` | `ratio` (в файлах встречается один раз: `ratio = 1` в `bt_heal_if_needed`) | Нажимает ЛКМ | ✅ |
+| `action_pull_trigger` | `ratio` (в файлах встречается один раз: `ratio = 1` в `bt_heal_if_needed`; по вики не читается) | Нажимает ЛКМ | ✅ `ratio` ⚠️ |
 | `action_look_at` | `input_angles` (string) или `input_location` (string) | Поворачивает бота. Указывать одно из двух | ✅ |
 | `action_secondary_attack` | — | Вторичная атака (ПКМ) | ⚠️ не встречен |
 | `action_reload` | — | Перезарядка | ⚠️ не встречен |
 
 > **Important**
 >
-> `action_aim` **не разскопится со снайперки** до смены оружия — это известный баг, и `acquire_only = 1` в `bt_face_damage_inflictor` / `bt_look_around` — наследие, которое, вероятно, не работает. Не полагайтесь на `acquire_only`, чтобы заставить бота смотреть, но не стрелять — используйте `action_look_at`.
+> `action_aim` **не разскопится со снайперки** до смены оружия — это известный баг. Официальный workaround: вызвать `action_equip_weapon` с тем же оружием, которое уже в руках (или с `"BEST"`, если оно уже лучшее) — это сбрасывает состояние прицеливания (unscope). Не полагайтесь на `acquire_only`, чтобы заставить бота смотреть, но не стрелять — используйте `action_look_at`.
 
 ### 8.4. Гранаты
 
 | Узел | Ключи | Что делает | Статус |
 |---|---|---|---|
-| `action_aim_projectile` | `input` (position), `output` (string) | Рассчитывает углы для броска гранаты. Известный баг: не учитывает траекторию, бот бросает неточно. `output` пишет **углы**, а не позицию. Работает только потому, что `action_look_at input_location` принимает и углы, и позиции | ✅ |
-| `action_throw_utility` | `name` (string), `location` (position), `velocity` (position) | **Прямой бросок гранаты со спавном в заданной мировой позиции.** `location` — мировая позиция, куда спавнится граната (не позиция бота). `velocity` — начальная скорость. Не использует `action_aim_projectile`, не зависит от того, куда смотрит бот | ✅ |
+| `action_aim_projectile` | `input` (position), `output` (string) | Рассчитывает углы для броска гранаты. Известный баг: **полностью игнорирует гравитацию и физику полёта** — просто берёт вектор направления от бота к цели и записывает его в углы. `output` пишет **углы**, а не позицию. Работает только потому, что `action_look_at input_location` принимает и углы, и позиции | ✅ |
+| `action_throw_utility` | `name` (string), `location` (position), `velocity` (position) | **Прямой бросок гранаты со спавном в заданной мировой позиции.** `location` — мировая позиция, куда спавнится граната (не позиция бота). `velocity` — начальная скорость. Не использует `action_aim_projectile`, не зависит от того, куда смотрит бот | ✅ (только CS:GO Guardian, `op11_county_2`) |
 
 **8.4.1.** `action_throw_utility` — это не просто «бросить гранату», а **скриптовая установка**. См. [§17](#17-скриптовые-установки-гранат).
 
@@ -622,14 +710,14 @@ negated = 1
 
 | Где | Что |
 |---|---|
-| `coop/autumn/modules/bt_throw_utility_if_covered.kv3` | `action_aim_projectile input = "Enemy" output = "UtilityTarget"` |
-| **Обход в Guardian** | Используйте `action_throw_utility` с точной позицией и скоростью |
+| `coop/autumn/modules/bt_throw_utility_if_covered.kv3` (CS:GO) | `action_aim_projectile input = "Enemy" output = "UtilityTarget"` |
+| **Обход в Guardian (CS:GO)** | `action_throw_utility` с точной позицией и скоростью (только `op11_county_2`) либо скриптовый паттерн `move_to → look_at(input_angles) → equip → wait → pull_trigger` (sirocco_2/4/5) |
 
 ### 8.5. Предметы и инвентарь
 
 | Узел | Ключи | Что делает | Статус |
 |---|---|---|---|
-| `action_equip_weapon` | `weapon` (string, classname или BEST) | Выбирает оружие | ✅ |
+| `action_equip_weapon` | `weapon` (string, classname или BEST) | Выбирает оружие. Вызов с уже активным оружием сбрасывает прицел (unscope) — см. workaround в §8.3 | ✅ |
 | `action_equip_item` | `item` (string), `items_one_of` (string[]) | Выбирает предмет по classname | ✅ |
 | `action_acquire_items` | `items` (string[]), `remove_all_items` (bool) | Выдаёт предметы. `remove_all_items = 1` — предварительно очистить инвентарь | ✅ |
 | `action_buy` | — | Случайная покупка | ✅ |
@@ -661,19 +749,24 @@ purchases =
 | `save_threshold` | Если у бота меньше денег — пропускает покупку |
 | `team_filter` | `SAME` / `ENEMY` / `ANY` |
 
-**8.6.2.** Известный баг: один бот может заставить покупать всех. Используйте `decorator_run_once domain = "'CoordinatedBuy'"` вокруг `action_coordinated_buy`.
+**8.6.2.** Известных бага два (оба подтверждены Valve Developer Community):
+
+1. Один бот может заставить покупать **всех**.
+2. **Наследование предметов**: боты, стоящие ниже в массиве `purchases`, наследуют предметы от ботов выше — внутренний буфер покупок не очищается между итерациями по ботам.
+
+Решение для обоих: использовать узел строго внутри `decorator_run_once` с уникальным `domain` (например, `"'CoordinatedBuy'"`), чтобы его выполнял только один бот-инициатор, а остальные ждали через `decorator_wait_success` + `action_compare_global_counter` (см. §18).
 
 ### 8.7. Стратегии и координация
 
 | Узел | Ключи | Что делает | Статус |
 |---|---|---|---|
-| `action_choose_bomb_site_area` | `input` (number), `output` (string) | Позиция бомбсайта по индексу. `input` может быть 0/1, ключом blackboard или ConVar `@mp_guardian_target_site` (47 использований, все — в Guardian) | ✅ |
+| `action_choose_bomb_site_area` | `input` (number), `output` (string) | Позиция бомбсайта по индексу. `input` может быть 0/1, ключом blackboard или ConVar `@mp_guardian_target_site` (47 использований, все — CS:GO Guardian) | ✅ |
 | `action_choose_random_waypoint` | `input` (string), `output` (string) | Случайный тайл навмеша из `input` | ✅ |
-| `action_choose_team_spawn_area` | `output` (string), `team` (enum) | Нав-зона со спавнами команды | ✅ `team` ⚠️ |
+| `action_choose_team_spawn_area` | `output` (string), `team` (enum) | Нав-зона со спавнами команды | ✅ `team` ⚠️ не встречается |
 | `action_choose_random_waypoint_within_radius` | `origin` (position), `radius` (number), `output` (string) | Случайная точка в радиусе. `radius` может быть числом, строкой-литералом или ключом blackboard | ✅ |
-| `action_choose_guardian_bomb_plant_location` | `output` (string) | Выбирает позицию закладки бомбы Guardian. Работает, только если `@mp_plant_c4_anywhere = 1` (14+4 использования). Пишет нав-тайл (позицию), совместимый с `action_move_to` | ✅ |
+| `action_choose_guardian_bomb_plant_location` | `output` (string) | Выбирает позицию закладки бомбы Guardian. Работает, только если `@mp_plant_c4_anywhere = 1` (18 использований: 14+4). Пишет нав-тайл (позицию), совместимый с `action_move_to` | ✅ |
 | `action_select_areas_within_radius` | `input` (position), `radius` (number), `output` (string) | Выбирает нав-зоны в радиусе. `radius` — число, строка или ключ | ✅ |
-| `action_assign_guardian_loadout` | `input_token_name` (string), `assignments` (`{token, loadout[]}[]`) | Раздаёт лутауты Guardian по токенам и волнам | ✅ |
+| `action_assign_guardian_loadout` | `input_token_name` (string), `assignments` (`{token, loadout[]}[]`) | Раздаёт лодауты Guardian по токенам и волнам (`wave_numbers` / `wave_number_min` / `weight`) | ✅ |
 
 **8.7.1.** `action_assign_guardian_loadout` — структура `loadout`:
 
@@ -694,6 +787,8 @@ purchases =
 | `wave_numbers` | Массив номеров волн, в которых доступен этот loadout |
 | `wave_number_min` | Альтернатива `wave_numbers` — «начиная с этой волны» |
 | `weight` | Вес при случайном выборе среди подходящих |
+
+Пример — `op10_apollo` («пистолетные раунды»): все лодауты — пистолеты, раздаваемые по волнам: usp/hkp2000 → elite/tec9/fiveseven/cz75a → revolver/deagle (волны 1–4).
 
 ### 8.8. Служебные действия
 
@@ -723,11 +818,11 @@ input = "'Use'"
 | `name` | targetname энтити (обратите внимание: строка с внутренними одинарными кавычками, как `domain`) |
 | `input` | имя input-порта энтити (`'Use'`, `'Open'`, `'Trigger'` и т.д.) |
 
-Позволяет открывать двери/нажимать кнопки на карте **без pathfinding-движения** к ним. В `bt_op11_county_2` используется в волне 1, чтобы открыть все двери на Creek.
+Позволяет открывать двери/нажимать кнопки на карте **без pathfinding-движения** к ним. В `bt_op11_county_2` используется в волне 1 (6 вхождений), чтобы один бот открыл все двери на Creek — в паре с `decorator_run_once domain = "'AllBots'"` (единственное место с кавычками у `AllBots`).
 
 **8.8.2.** `action_wait` — про modulo:
 
-В `bt_default.kv3` (CS2 Deathmatch) используется с `wait_time_min` / `wait_time_max`, без modulo. В `bt_op09_grunts_card2/bt_strat_hold_position.kv3` — тоже без modulo. Modulo-параметры в дампах **не встречаются**, но описаны в Source2 Wiki.
+Modulo-параметры (`wait_modulo_tick_mod/add`) в дампах **не встречаются**, но описаны в Source2 Wiki. В `bt_default.kv3` (CS2 Deathmatch) и `bt_strat_hold_position.kv3` — только `wait_time_min` / `wait_time_max`.
 
 ---
 
@@ -752,7 +847,7 @@ input = "'Use'"
 | `selector` | С первого ребёнка каждый тик | Запускает первого прошедшего | Да — останавливает текущего при появлении более приоритетного |
 | `parallel` | Все дети | Все дети каждый тик | Провал любого = стоп всех |
 
-**9.4.** Пример разворачивания `sequencer[ move_to(bot_target), look_at(bot_target), wait(2..3) ]` в `repeat`:
+### 9.4. Пример разворачивания `sequencer[ move_to(bot_target), look_at(bot_target), wait(2..3) ]` в `repeat`:
 
 | Тик | Что происходит |
 |---|---|
@@ -858,7 +953,7 @@ decorator_bot_service в корне → истекает память: {key, tim
 | `UtilityTarget` | Углы для броска гранаты | `action_aim_projectile` | `action_look_at` в `bt_throw_utility_if_covered` |
 | `ApproachPoint` | Случайная точка на навмеше для осмотра | `decorator_random_approach_point` в `bt_look_around` | `action_aim` |
 | `HidingSpot` | Позиция выбранного укрытия | `decorator_hiding_spot_service` | `action_move_to` (`hiding_spot = "HidingSpot"`) |
-| `ShouldBuy` | Массив предметов к покупке | `decorator_buy_service` | `condition_is_empty`, `action_buy` |
+| `ShouldBuy` | Массив предметов к покупке | `decorator_buy_service` | `condition_is_empty`, `action_buy` (читается только в deathmatch и rush!) |
 | `NearestThreat` | Ближайшая видимая угроза | `decorator_picker_reaction_time` в `bt_select_nearby_threat` | `decorator_memory` |
 | `NearestThreatMemory` | Копия ближайшей угрозы | `decorator_memory` в `bt_select_nearby_threat` | `action_move_to` (`threat = "NearestThreatMemory"`) |
 | `Event` | Событие для исследования | `decorator_picker_reaction_time` в `bt_investigate_closest_memorized_event` | `action_look_at`, `action_move_to` |
@@ -869,7 +964,7 @@ decorator_bot_service в корне → истекает память: {key, tim
 | `Hostage` | `hostage_entity` рядом | `decorator_sensor` (CLASSNAME hostage_entity) в `bt_pickup_hostage` | `action_move_to` |
 | `HostageSurroundingAreas` | Нав-зоны вокруг хостажа | `action_select_areas_within_radius` | `action_choose_random_waypoint` |
 | `GroupId` | Идентификатор группы токенов | `decorator_token_service` | `condition_is_equal` |
-| `GroupMemberId` | Идентификатор участника группы | `decorator_token_service` | `condition_is_equal` |
+| `GroupMemberId` | Идентификатор участника группы | `decorator_token_service` | `condition_is_equal` (в т.ч. 40× `'ParachuteN'` в Blacksite) |
 | `EngagedEntities` | Помеченные враги | `decorator_tag_entity` | `decorator_tag_threshold` |
 | `ThreatsWithinFOV` | Угрозы в FOV | `decorator_picker_reaction_time` в `bt_clear_threats_within_fov` | `decorator_picker_visible`, `decorator_remove` |
 | `RushSite` | Глобальный счётчик «сайт раша» | `action_set_global_counter` в `bt_coordinated_buy` / `bt_strategy_smoke` | `action_compare_global_counter` |
@@ -879,6 +974,12 @@ decorator_bot_service в корне → истекает память: {key, tim
 | `PositioningForTopSmoke` | Глобальный счётчик | `action_set_global_counter` | `decorator_dec_global_counter` |
 | `WaitForCoordinatedBuy` | Глобальный счётчик | `action_set_global_counter` в `bt_coordinated_buy` | `action_compare_global_counter` |
 | `DidNotPurchase` | ID бота, который не купил | `action_coordinated_buy` | `condition_is_empty` |
+| `StratCounter` | Счётчик стратегии (int) | `subtree params` (card2) | `bt_strat_hold_position` |
+| `HoldDestination` | Позиция удержания | `subtree params` (card2) | `action_move_to` в `bt_strat_hold_position` |
+| `HoldApproachPoint` | Точка подхода при удержании | `subtree params` (card2) | `action_move_to` |
+| `HoldAngles` | Углы взгляда при удержании | `subtree params` (card2) | `action_look_at` |
+| `IntermediateWaypoint` | Промежуточная точка маршрута | `subtree params` (card2) | `action_move_to` |
+| `ThrowUtility` | Имя утилити-подстратегии | `subtree params` (card2) | selector стратегии броска |
 
 ### 10.7. Глобальные флаги и счётчики
 
@@ -891,15 +992,15 @@ decorator_bot_service в корне → истекает память: {key, tim
 
 ### 10.8. Параметры subtree
 
-`subtree` может записывать значения в blackboard до старта. Только `int` или `string`. `float`/`bool` дают ошибку:
+`subtree` может записывать значения в blackboard до старта. Только `int` или `string` (векторы — строкой). `float`/`bool` дают ошибку:
 
 ```
 [AI BT]: unsupported type for subtree parameter
 ```
 
-> **Warning**
+> **Note**
 >
-> В обоих дампах **ни одного** использования `params =` не найдено. Синтаксис взят из Source2 Wiki; в официальных деревьях не встречается.
+> `params` **официально используется Valve**: 15 вхождений в CS:GO-дампе, все в `op09_grunts_card2` (`bt_strat_lobby` ×6, `bt_strat_heaven` ×3, `bt_strat_outside` ×6 → параметры для `bt_strat_hold_position`). В CS2-дампе не встречается. См. §5.1.
 
 ---
 
@@ -910,7 +1011,7 @@ decorator_bot_service в корне → истекает память: {key, tim
 | Переменная | Тип | Откуда | Использование в дампах |
 |---|---|---|---|
 | `NumberOfTerrorists` | int | Движок | — |
-| `NumberOfAliveTerrorists` | int | Движок | ×1 (`bt_plant_bomb_if_owned`) |
+| `NumberOfAliveTerrorists` | int | Движок | ×1 в каждой версии (CS:GO `guardian/modules/bt_plant_bomb_if_owned` и CS2 practice-версия) |
 | `NumberOfCounterTerrorists` | int | Движок | — |
 | `NumberOfAliveCounterTerrorists` | int | Движок | — |
 | `AccountBalance` | int | Движок | вики-источник, использования не найдено |
@@ -919,13 +1020,14 @@ decorator_bot_service в корне → истекает память: {key, tim
 | `TeamName` | string | Движок | ×4 (Practice: `condition_is_equal source="TeamName" destination="'T'"`) |
 | `RoundNumber` | int | Движок | ×138 (Practice) |
 | `BlindnessPercentage` | float | Движок | вики-источник, использования не найдено |
-| `GuardianWaveNumber` | int | Движок (Guardian) | активно (county_2, ancient, и т.д.) |
+| `GuardianWaveNumber` | int | Движок (Guardian) | активно (county_2: `>= 5` в bt_bot_1..5; ancient и т.д.) |
+| `BombIsBeingDefused` | — | Движок (из CS:GO-вики) | вики-источник, в дампах не встречено |
 | `LastCoopSpawnPointName` | string | Движок (Co-op) | Co-op `bt_determine_rush_center` |
 | `LastCoopSpawnPointLocation` | Vector | Движок (Co-op) | Co-op guard/roam/rush |
 
 > **Note**
 >
-> `TeamName` и `RoundNumber` отсутствуют в списке Source2 Wiki, но активно используются в Practice. Список на вики неполный.
+> `TeamName` и `RoundNumber` отсутствуют в списке Source2 Wiki, но активно используются в Practice. Список на вики неполный — как и список зарезервированных переменных в целом.
 
 ---
 
@@ -944,6 +1046,10 @@ decorator_bot_service в корне → истекает память: {key, tim
 | `cv_bot_ai_bt_moveto_show_next_hiding_spot` | Показать следующее проверяемое укрытие | `sv_cheats 1` |
 | `developer 1` | Писать `[AI BT]: Loaded behavior tree '<file>'` при спавне | — |
 
+> **Warning**
+>
+> По Source2 Wiki cheat-квары отладки (`cv_bot_ai_bt_*`) не имеют release-флага и могут не работать в релизной сборке игры — только в локальных/приватных сессиях с `sv_cheats 1`.
+
 ### 12.2. Сообщения
 
 | Сообщение | Причина |
@@ -951,7 +1057,7 @@ decorator_bot_service в корне → истекает память: {key, tim
 | `[AI BT]: Loaded behavior tree '<file>'` | При `developer 1` |
 | `[AI BT] warnings` | Всегда |
 | `Blackboard entry 'X' does not exist nor it is a valid entity name` | Ключ не найден |
-| `[AI BT]: Config node 'attack' must contain 13 entries` | Неверное число строк |
+| `[AI BT]: Config node 'attack' must contain 13 entries` | Неверное число строк (CS2) |
 | `[AI BT]: unsupported type for subtree parameter` | `float`/`bool` в `params` |
 
 ---
@@ -960,23 +1066,25 @@ decorator_bot_service в корне → истекает память: {key, tim
 
 | Аспект | CS:GO | CS2 |
 |---|---|---|
-| Уровни скилла | 9 (включая `elite`) — как и в CS2 | 9 (с `elite`) |
-| Строк в `attack` | **20** во всех конфигах (coop, deathmatch, guardian) | 13 для Deathmatch/Rush/Practice/ArmsRace; 20 для Co-op/Guardian |
-| Согласованность конфигов | coop ≠ deathmatch (`look_around_*`), guardian ≠ deathmatch (RIFLE) | 4 конфига (`armsrace`, `deathmatch`, `practice`, `rush`) байт-идентичны |
-| `aim_ready_angle_tolerance` | Не документирован | Есть в конфиге |
+| Уровни скилла | 9 (включая `elite`) | 9 (с `elite`) |
+| Строк в `attack` | **20** во всех конфигах (coop, deathmatch, guardian) | **13** во всех конфигах (armsrace, deathmatch, practice, rush — байт-идентичны) |
+| Набор режимов с деревьями | Co-op Strike, Guardian, Deathmatch | Deathmatch, Arms Race, Rush, Practice |
+| Согласованность конфигов | coop ≠ deathmatch (`look_around_*`), guardian — отдельный «замедленный» конфиг (см. §4.6.4) | 4 конфига байт-идентичны (одинаковый md5) |
+| `aim_ready_angle_tolerance` | Есть во всех конфигах (3.0; guardian 5.0/4.5) — отсутствовал только в старой вики | Есть в конфиге |
 | `TeamName` / `RoundNumber` | Не документированы | Используются в Practice |
 | Документация узлов | Неточная, много TODO | Точный список читаемых ключей |
-| Узлы вне официальных деревьев | Не отмечены | 36 отмечены, но часть используется в Guardian/Co-op |
-| Игнорируемые параметры | Не отмечены | `acquire_only`, `ratio`, `distance_threshold` |
+| Узлы вне официальных деревьев | Не отмечены | 36 отмечены, но часть используется в Guardian (см. §26.3) |
+| Игнорируемые параметры | Не отмечены | `acquire_only`, `ratio`, `distance_threshold` и др. (см. §26.1) |
 | Модель выполнения | Не описана | Два прохода |
-| Subtree params | Не описаны | Только `int`/`string`; в дампах не используются |
-| `decorator_picker_*` | Без доменов | С `input_domain`/`output_domain` |
+| Subtree params | **Используются** (`op09_grunts_card2`, 15 вхождений); только `int`/`string` | Не встречаются |
+| `decorator_picker_*` | С `input_domain = "AllBots"` в `bt_clear_threats_within_fov` и `bt_select_nearby_threat` (как в CS2) | С `input_domain`/`output_domain` |
 | `decorator_sensor` | Без `append_items` | С `append_items` |
-| `action_wait` | 2 ключа | + `wait_modulo_tick_mod/add` |
-| `action_move_to` доп. параметры | `damaging_areas_penalty_cost`, `additional_arrival_epsilon_2d`, `hiding_spot_check_distance_threshold` — только здесь | — |
-| Deathmatch-деревья | — | CS2 добавил hostage-сенсор (`append_items`, `class_name = "hostage_entity"`) в hunt-ветку; остальное идентично |
+| `action_wait` | 2 ключа | + `wait_modulo_tick_mod/add` (не используются) |
+| `action_move_to` доп. параметры | `damaging_areas_penalty_cost`, `additional_arrival_epsilon_2d`, `hiding_spot_check_distance_threshold` — только здесь (Guardian) | — |
+| Deathmatch-деревья | База | CS2 = CS:GO + ровно один блок: hostage-сенсор с `append_items` в hunt-ветке (diff в 8 строк) — боты подбирают заложников в DM, если они есть на карте |
 | Общие модули Guardian/Practice (`clear_threats_within_fov`, `memorize_threats`, `pickup_bomb_if_nearby`, `pickup_hostage`, `select_nearby_threat`) | Идентичны CS2-версиям | — |
-| Диффы | `plant_bomb_if_covered/owned`, `pickup_hostage_if_covered` (~4–15 строк) | — |
+| Диффы модулей | `plant_bomb_if_covered/owned`, `pickup_hostage_if_covered` (~4–15 строк) | — |
+| Инвентарь дампов | 544 файла: 519 guardian + 9 coop + 14 modules + 2 deathmatch | 57 файлов: armsrace, deathmatch, modules, practice, rush + конфиги |
 
 ---
 
@@ -986,9 +1094,9 @@ decorator_bot_service в корне → истекает память: {key, tim
 
 | Модуль | Что делает |
 |---|---|
-| `bt_attack` | Берёт `ShortTermAttackMemory` → reaction time → сортирует по дистанции → берёт ближайшего → если есть враг: помечает в `EngagedEntities` (SET, 1 с) → параллельно: экипирует `BEST`, повторяет `succeed[out_of_ammo → equip BEST]`, `selector[flee_area_damage, если нож — бежит к врагу, иначе combat_positioning]`, повторяет `aim Enemy ready="AimReady"`, повторяет `attack Enemy ready="AimReady" output="Attacking"` |
+| `bt_attack` | Берёт `ShortTermAttackMemory` → reaction time → сортирует по дистанции (`decorator_ranker_dist` + `decorator_picker_max_score` — берётся ближайший, см. §15.9) → если есть враг: помечает в `EngagedEntities` (SET, 1 с) → параллельно: экипирует `BEST`, повторяет `succeed[out_of_ammo → equip BEST]`, `selector[flee_area_damage, если нож — бежит к врагу, иначе combat_positioning]`, повторяет `aim Enemy ready="AimReady"`, повторяет `attack Enemy ready="AimReady" output="Attacking"` |
 | `bt_memorize_enemies_vision` | Сенсор FOV, PLAYERS, ENEMY → nearby 1500 → visible → reaction time → `ShortTermAttackMemory` + `LongTermMemory`. В op11 — локальные override-ы (см. §21.3) |
-| `bt_memorize_noises` | Сенсор сфера 3000, NOISE → weight_as_distance → random_by_distance 800–3000 → dedup 100 к `LongTermMemory` → reaction time → `LongTermMemory` |
+| `bt_memorize_noises` | Сенсор сфера 3000, NOISE → weight_as_distance → random_by_distance 800–3000 (вероятностный фильтр) → dedup 100 к `LongTermMemory` → reaction time → `LongTermMemory` |
 | `bt_memorize_damage` | Сенсор DAMAGE → reaction time → `ShortTermDamageMemory`; blocked_by_smoke 3000 → `DamageThroughSmokeMemory` |
 | `bt_memorize_area_damage_grenades` | Сенсор GRENADE → grenade_type (FIRE, EXPLOSIVE) → nearby 2500 → visible → reaction time → `ShortTermAreaDamageMemory` |
 | `bt_memorize_area_damage_infernos` | Сенсор CLASSNAME inferno → nearby 1000 → reaction time → `ShortTermAreaDamageMemory` |
@@ -1001,16 +1109,24 @@ decorator_bot_service в корне → истекает память: {key, tim
 | `bt_flee_area_damage_threats` | Если `ShortTermAreaDamageMemory` не пусто: `action_flee_area_damage 500` → бежит к `FleeSpot` (`auto_look_adjust=0`) |
 | `bt_look_around` | `random_approach_point` → `action_aim` (`acquire_only`) → ждёт 0.2–0.5 с |
 | `bt_plant_bomb_if_covered` | Если есть `weapon_c4` и в `ShortTermAttackMemory` ≥2 врага: выбирает бомбсайт, идёт, проверяет `@mp_plant_c4_anywhere` или `is_at_bomb_site`, экипирует C4, ждёт 0.5 с, повторяет `action_pull_trigger` |
-| `bt_plant_bomb_if_owned` | Если есть `weapon_c4` и нет флага `DontPlantBomb`: экипирует `BEST`, выбирает бомбсайт, идёт, проверяет site, экипирует C4, ждёт 1 с, параллельно: с шансом 0.5 и если `NumberOfAliveTerrorists=1` ставит флаг `DontPlantBomb` (3–5 с), и повторяет `action_pull_trigger`. Если флаг `DontPlantBomb` — смотрит по сторонам |
+| `bt_plant_bomb_if_owned` | Если есть `weapon_c4` и нет флага `DontPlantBomb`: экипирует `BEST`, выбирает бомбсайт, идёт, проверяет site, экипирует C4, ждёт 1 с, параллельно: с шансом 0.5 и если `NumberOfAliveTerrorists=1` ставит флаг `DontPlantBomb` (3–5 с) — предохранитель, чтобы последний T не закладывал слишком рано (см. §15.7), и повторяет `action_pull_trigger`. Если флаг `DontPlantBomb` — смотрит по сторонам |
 | `bt_pickup_bomb_if_nearby` | Сенсор сфера 3000, CLASSNAME weapon_c4, orphan_only → сортирует → берёт ближайшее → try_lock `'PickupBombIfNearby'` → `action_move_to` (`nearest_area_distance_threshold=20`) |
 | `bt_defuse_bomb_if_nearby` | Сенсор сфера 3000, CLASSNAME planted_c4, orphan_only → сортирует → try_lock `'DefuseBombIfNearby'` → идёт (`arrival_epsilon = 35`), смотрит, ждёт 0.25 с, повторяет `action_use` |
 | `bt_pickup_hostage` | Сенсор CLASSNAME hostage_entity, orphan_only → идёт (`arrival_epsilon=35`), смотрит, ждёт 1 с, повторяет `action_use` |
 | `bt_pickup_hostage_if_covered` | Берёт `ShortTermAttackMemory` → reaction time → сортирует → если ≥2 врага в `EngagedEntities` (CLEAR, amount=2, AT_LEAST) → `bt_pickup_hostage` |
-| `bt_clear_threats_within_fov` | succeed negated=1 → если `ShortTermAttackMemory` пусто: берёт `Threats` (AllBots) → reaction time → visible → удаляет из `Threats`. Side-effect, всегда failure |
+| `bt_clear_threats_within_fov` | succeed negated=1 → если `ShortTermAttackMemory` пусто: берёт `Threats` (AllBots, `input_domain = "AllBots"` — и в CS:GO, и в CS2) → reaction time → visible → удаляет из `Threats`. Side-effect, всегда failure |
 | `bt_select_nearby_threat` | selector[succeed negated=1 → `remove_key NearestThreatMemory`; succeed negated=1 → `Threats` (AllBots) → reaction time → visible (`check_fov=0`) → ranker_dist → max_score → если есть: memory → `NearestThreatMemory`]. Всегда failure, но обновляет `NearestThreatMemory` |
 | `bt_memorize_threats` | Сенсор DAMAGE → reaction time → `Threats` (AllBots) |
 
-### 14.2. Co-op
+**14.1.1.** CS2 Rush-дерево (`rush/bt_default.kv3`) — единственное CS2-дерево с **живой** buy-веткой:
+
+| Ветка | Что делает |
+|---|---|
+| Buy | `decorator_buy_service output = "ShouldBuy"` → `condition_is_empty ShouldBuy (negated)` → `action_buy` (ShouldBuy реально **читается**) |
+| Antenna | `decorator_try_lock domain = "'PressAntennaButton'"` → движение к `ant.button` по targetname → нажатие |
+| Hunt | Выбор зоны охоты + hostage-сенсор с `append_items = 1` |
+
+### 14.2. Co-op (CS:GO)
 
 | Модуль | Что делает |
 |---|---|
@@ -1029,40 +1145,65 @@ decorator_bot_service в корне → истекает память: {key, tim
 |---|---|---|---|
 | `bt_guard` | Да, только если событие в 450–550 юнитах; иначе смотрит на событие (если видимо) | Возврат на `LastCoopSpawnPointLocation` | `maybe say "Clear"` (0.7), `wait 4–8` |
 | `bt_roam` | Да | `choose_random_waypoint_within_radius LastCoopSpawnPointLocation 700` | `maybe say "Clear"` (0.7), `wait 1–3` |
-| `bt_rush` | Да | `choose_random_waypoint_within_radius RushCenterLocation RushCenterRadius`; если `RushCenterLocation` пуст — `action_jump` (TODO) | — |
+| `bt_rush` | Да | `choose_random_waypoint_within_radius RushCenterLocation RushCenterRadius`; если `RushCenterLocation` пуст — `action_jump` (fallback) | — |
 | `bt_sniper` | Нет | Нет (стоит на месте) | — |
 
-### 14.3. Guardian
+### 14.3. Guardian (CS:GO)
 
 | Модуль | Что делает |
 |---|---|
 | `bt_item_strategy` | Покупка/выдача предметов по токенам стратегий |
-| `bt_takeover_strategy` | Захват позиции по токенам стратегий |
-| `bt_attack_with_shield` | Атака со щитом |
+| `bt_takeover_strategy` | Захват позиции по токенам стратегий. В Practice — селектор из 10 subtree (`t_1`…`t_5`, `ct_1`…`ct_5`) |
+| `bt_attack_with_shield` | Атака со щитом (условие дальности — см. §7.2) |
 | `bt_investigate_with_shield` | Исследование со щитом |
-| `bt_coordinated_buy` | Скоординированная покупка (с известным багом) |
+| `bt_coordinated_buy` | Скоординированная покупка (с двумя известными багами, см. §8.6.2) |
 | `bt_strategy_smoke`, `bt_strategy_grenades` | Стратегии дымов/гранат |
-| `action_assign_guardian_loadout` | Раздача лутаутов по волнам в `item_strategy` |
-| `action_throw_utility` | Прямые броски дымов/молотовых в `county_2`, `sirocco_2/4/5` |
+| `bt_strat_hold_position` | **Параметризованное удержание позиции** — единственный получатель `subtree params` (см. §5.1) |
+| `action_assign_guardian_loadout` | Раздача лодаутов по волнам в `item_strategy` |
+| `action_throw_utility` | Прямые броски дымов/молотовых — **только** в `op11_county_2` (39 вызовов); в sirocco_2/4/5 вместо него паттерн `move_to → look_at(input_angles) → equip → wait → pull_trigger` |
 
-### 14.4. Practice (`newplayer_dust2_01`)
+### 14.4. Practice (`newplayer_dust2_01`, CS2)
 
 | Модуль | Что делает |
 |---|---|
 | `bt_ct_1` … `bt_ct_5` | Стратегии CT по группам (`GroupId = 'ct_1'` … `'ct_5'`). В раунде 1 все идут на B, в раундах 2–12 — разные позиции в зависимости от группы |
 | `bt_t_1` … `bt_t_5` | Стратегии T по группам. Раунд 1 — long doors, раунд 2 — long, раунд 3 — cat, раунд 4–5 — B, и т.д. |
+| `bt_takeover_strategy` | Селектор из 10 subtree: `t_1`…`t_5`, `ct_1`…`ct_5` (диспетчер по `GroupId`) |
 | `bt_goto_a_site`, `bt_goto_b_site_from_ct`, `bt_goto_a_corner`, `bt_goto_mid_b`, `bt_goto_a_car`, `bt_goto_b_car_from_ct`, `bt_goto_b_site_from_t` | Точки назначения (координаты вшиты) |
 | `bt_wait` | `action_wait` 4.5–5.5 с |
 | `bt_acquire_t_weapons` / `bt_acquire_ct_weapons` | Round-based loadout (см. [§22](#22-practice-полная-таблица-раундов)) |
 | `bt_item_strategy` | `decorator_run_once → action_buy` |
 
-### 14.5. Дополнительные модули (добавлено)
+**14.4.1.** Practice-корень (полная схема):
+
+```
+decorator_hiding_spot_service (обёртка — как в Co-op!)
+└── parallel
+    ├── token_service: 10 токенов (t_1..t_5, ct_1..ct_5),
+    │   assignments = [[1,1,1,1,1,1,1,1,1,1]], team_restriction T/CT
+    ├── buy_service (ShouldBuy пишется, но НЕ читается — покупка через item_strategy!)
+    ├── repeat → memorization (8 модулей)
+    └── repeat → selector
+        ├── item_strategy (run_once → action_buy)
+        ├── attack
+        ├── face_damage
+        ├── attack_damage_inflictor_smoke
+        ├── clear_threats
+        ├── select_nearby_threat
+        ├── takeover_strategy (10 subtree по GroupId)
+        ├── по TeamName:
+        │   T  → plant_if_covered / plant_if_owned / pickup_bomb
+        │   CT → defuse
+        └── investigate …
+```
+
+### 14.5. Дополнительные модули Guardian (CS:GO)
 
 | Модуль | Где | Что делает |
 |---|---|---|
-| `bt_bot_1` … `bt_bot_5` | `op11_county_2` | Пер-ботовые волновые стратегии: `GroupId = 'Bot1'…'Bot5'` + `GuardianWaveNumber` → телепорты и `subtree` (`Firebomb`, `SmokeHouseRush`, …). Токены `Bot1…Bot5` раздаёт `decorator_token_service` корня |
+| `bt_bot_1` … `bt_bot_5` | `op11_county_2` | Пер-ботовые волновые стратегии: `GroupId = 'Bot1'…'Bot5'` + `GuardianWaveNumber >= 5` → телепорты и `subtree` (`Firebomb`, `SmokeHouseRush`, …). Токены `Bot1…Bot5` раздаёт `decorator_token_service` корня |
 | `bt_attack_example` / `bt_utility_example` | `blacksite_1/3`, `county_2`, `sirocco_5` | Шаблоны-заготовки: селектор по `GroupId = 'AttackExample'`, `decorator_run_once max_attempts = 1`, `teleport` + `wait`. Идеальный образец пер-ботовой стратегии |
-| `bt_parachute_1` | `op11_blacksite_1` | 40 `condition_is_equal` с `GroupMemberId = 'ParachuteN'`. См. §20 |
+| `bt_parachute_1` | `op11_blacksite_1` | 40 `condition_is_equal` с `GroupMemberId = 'ParachuteN'` и `domain = "'ParachuteN'"`. См. §20 |
 
 ---
 
@@ -1160,7 +1301,7 @@ child = sequencer[ wait 0.2–0.3, action_set_global_flag DontPlantBomb 3–5 ]
 
 ### 15.8. `action_move_to` + `action_teleport` для точной расстановки
 
-Из `bt_op10_ancient_a/bt_cover_smoke.kv3`:
+Из `op10_ancient_a/bt_cross_smoke.kv3` (**не** cover_smoke — там другие координаты):
 
 ```kv3
 action_move_to destination = "-1906.750732 169.041382 76.031250" ... auto_look_adjust = 1
@@ -1175,7 +1316,7 @@ action_move_to destination = "-1881.802856 1085.127563 52.031250" ... damaging_a
 
 `damaging_areas_penalty_cost = 0.0` — бот идёт **сквозь** молотов, чтобы успеть на позицию.
 
-В Guardian `action_teleport` используется для **точной** расстановки ботов перед стратегией: сначала `action_move_to` до определённой точки (иногда с `arrival_epsilon = 0.1–0.2`), потом `action_teleport` в **точную** позицию, чтобы `action_look_at` и `action_pull_trigger` сработали с нужных углов.
+В Guardian `action_teleport` используется для **точной** расстановки ботов перед стратегией: сначала `action_move_to` до определённой точки (иногда с `arrival_epsilon = 0.1–0.2`), потом `action_teleport` в **точную** позицию, чтобы `action_look_at` и `action_pull_trigger` сработали с нужных углов. После телепорта ставьте явный `action_look_at` — `auto_look_adjust` сам не сбрасывается.
 
 ### 15.9. `decorator_picker_max_score` + `decorator_ranker_dist`
 
@@ -1188,11 +1329,11 @@ child = decorator_picker_max_score
 input = "Enemy"
 ```
 
-`decorator_ranker_dist` присваивает score обратно пропорционально дистанции. `decorator_picker_max_score` берёт максимальный score → ближайшую сущность.
+`decorator_ranker_dist` присваивает score обратно пропорционально дистанции. `decorator_picker_max_score` берёт максимальный score → ближайшую сущность. **Без ранкера** score у всех одинаков и берётся первая сущность массива (порядок появления на сервере) — не забывайте ранкер.
 
 ### 15.10. Диагональное движение с парашютом
 
-См. [§20](#20-парашют-cs2-blacksire).
+См. [§20](#20-парашют-blacksite-csgo-guardian).
 
 ### 15.11. Готовый образец пер-ботовой стратегии
 
@@ -1210,38 +1351,57 @@ selector
 
 Это официальный образец того, как привязать действие к конкретному боту через `GroupId`/`GroupMemberId` из токен-сервиса.
 
+### 15.12. Jump-throw паттерн (Guardian, CS:GO)
+
+`action_jump` встречается в **25 CS:GO-файлах**, и почти все — утилити-стратегии op10/op11: jump-throw молотовых и смоков, которые нельзя кинуть с земли (ancient, mirage, nuke_b, overpass, train, vertigo, sandwich_molly, blacksite molly_one/two/smoke_two). Схема:
+
+```
+sequencer[
+    move_to (точная позиция, иногда teleport),
+    look_at (input_angles),
+    equip (граната),
+    wait,
+    action_jump,        // прыжок
+    pull_trigger        // бросок в воздухе — граната летит дальше/выше
+]
+```
+
 ---
 
 ## 16. Подводные камни
 
 | ❌ Не делайте | ✅ Делайте вместо этого |
 |---|---|
-| Полагаться на `acquire_only`, `ratio`, `distance_threshold` | Эти параметры в ряде узлов игнорируются |
-| Использовать `action_coordinated_buy` без `decorator_run_once` | `decorator_run_once domain = "'CoordinatedBuy'"` + `action_buy` |
+| Полагаться на `acquire_only`, `ratio`, `distance_threshold` (blocked_by_smoke) | Эти параметры движком не читаются (см. §26.1) |
+| Использовать `action_coordinated_buy` без `decorator_run_once` | `decorator_run_once domain = "'CoordinatedBuy'"` + ожидание через `decorator_wait_success` (два известных бага — §8.6.2) |
 | Забывать `mp_bot_ai_bt_clear_cache` | Всегда чистить кэш после правок |
-| Передавать `float`/`bool` в `subtree params` | Только `int` или `string` (и `params` в дампах вообще нет — см. §5.1) |
-| Использовать 20 строк в `attack` для CS2 Deathmatch | Ровно 13, в фиксированном порядке |
+| Передавать `float`/`bool` в `subtree params` | Только `int`/`string` (векторы — строкой); официальный образец — `op09_grunts_card2` |
+| Использовать 20 строк в `attack` для CS2 | Ровно 13, в фиксированном порядке; 20-строчный конфиг в CS2 не загрузится |
 | Использовать 13 строк в `attack` для CS:GO | Ровно 20 во всех CS:GO-конфигах (coop, deathmatch, guardian) |
-| Ожидать, что `action_aim` разскопится | Смените оружие или экипируйте то же заново |
+| Ожидать, что `action_aim` разскопится | Смените оружие или экипируйте то же заново (`action_equip_weapon` сбрасывает прицел) |
 | Полагаться на `condition_is_greater`/`is_less` | Используйте `greater_equal`/`less_equal` с `negated` |
 | Использовать `decorator_invert` в CS2 | Используйте `negated = 1` |
 | Забывать, что `action_attack` без `ready` стреляет сразу | Указывайте `ready`, если нужна синхронизация с `action_aim` |
-| Ожидать, что `action_aim_projectile` точно бросит гранату | Баг: не учитывает траекторию. Используйте `action_throw_utility` |
+| Ожидать, что `action_aim_projectile` точно бросит гранату | Баг: полностью игнорирует гравитацию/физику. Используйте `action_throw_utility` или скриптовый look_at-паттерн |
 | Использовать `decorator_picker_blocked_by_smoke` без понимания | Он оставляет только сущности **за** дымом |
+| `decorator_picker_max_score` без ранкера | Вернёт первую сущность массива, а не «лучшую»; ставьте `decorator_ranker_dist` перед ним |
+| `decorator_sensor team_filter = "ENEMY"` для гранат | Баг: вернёт гранаты T независимо от команды; используйте `OPPOSITE` |
 | Думать, что `action_acquire_items` не работает | ✅ Работает; встречается в Practice/Guardian |
-| Думать, что `action_teleport` не работает | ✅ Работает; встречается в Guardian/Co-op |
+| Думать, что `action_teleport` не работает | ✅ Работает; ×449 в CS:GO Guardian. Но не сбрасывает камеру — ставьте `action_look_at` |
 | Думать, что `action_crouch` не работает | ✅ Работает; встречается в `op09_grunts_card2` и `op10_engage_b` (`bt_boost_molly`) |
 | Игнорировать `decorator_dec_global_counter` | ✅ Встречается в `op09_grunts_card7_2` |
 | Писать `domain = PressAntennaButton` без кавычек | В файлах Valve: `domain = "'PressAntennaButton'"` (исключение: `"'AllBots'"` в `op11_county_2`) |
 | Унифицировать все `domain` под `"AllBots"` | Смотрите конкретный узел: где-то `"AllBots"`, где-то `"'StratTokens'"` |
 | Использовать `decorator_find_utility_strat`, `decorator_route_service`, `decorator_set_barrier` | Эти узлы не встречаются в официальных деревьях, поведение не подтверждено |
-| Путать `action_hide` и `decorator_hiding_spot_service` | В CS2 «укрыться» = `decorator_hiding_spot_service` + `action_move_to hiding_spot = "HidingSpot"` |
+| Путать `action_hide` и `decorator_hiding_spot_service` | «Укрыться» = `decorator_hiding_spot_service` + `action_move_to hiding_spot = "HidingSpot"` |
 | Ожидать `BT_ACTION_MOVETO_SAFEST_ROUTE` | Используется только `BT_ACTION_MOVETO_FASTEST_ROUTE`; движение — RUN/WALK |
-| Считать, что `decorator_buy_service` всегда влияет на поведение | См. §16.5: в Arms Race `ShouldBuy` пишется, но никогда не читается |
+| `action_jump` при `movement_type = WALK` | Баг: после прыжка тип движения сбрасывается на RUN — переустанавливайте WALK после |
+| Считать, что `decorator_buy_service` всегда влияет на поведение | В Arms Race **и Practice** `ShouldBuy` пишется, но никогда не читается (см. §16.5); покупка там идёт через `item_strategy` |
+| Копировать закомментированные блоки из op10/11-корней | В корнях 62 закомментированных subtree (в т.ч. parallel[FleeAreaDamageThreats, LookAround] после Item Strategy — активный только в Co-op autumn); проверяйте, что копируете |
 
-### 16.5. Мёртвый `ShouldBuy` в Arms Race (добавлено)
+### 16.5. Мёртвый `ShouldBuy` в Arms Race и Practice
 
-В `armsrace/bt_default.kv3` есть `decorator_buy_service output = "ShouldBuy"`, но в `selector` **нет ветки покупки**. `ShouldBuy` вычисляется и никогда не читается. Плюс в hunt-ветке armsrace нет `action_choose_bomb_site_area` — только team spawn + hostage-сенсор.
+В `armsrace/bt_default.kv3` **и** в `practice/newplayer_dust2_01.kv3` есть `decorator_buy_service output = "ShouldBuy"`, но в `selector` **нет ветки покупки**. `ShouldBuy` вычисляется и никогда не читается — в Practice покупка идёт через `bt_item_strategy = run_once → action_buy`. `ShouldBuy` реально **читается** только в deathmatch и rush.
 
 Это отличный пример того, что не всякий side-effect в дереве означает работающую механику. Копируя дерево как шаблон, проверяйте, что выход сервиса действительно читается ниже.
 
@@ -1251,7 +1411,11 @@ selector
 
 ## 17. Скриптовые установки гранат
 
-**17.1.** `action_throw_utility` — одно из самых мощных действий в CS2 Guardian. Оно позволяет **спавнить гранату в произвольной мировой позиции** с заданной скоростью, независимо от того, где стоит бот.
+> **Note**
+>
+> Раздел основан на **CS:GO Guardian-дампах**. В CS2-дампе `action_throw_utility` отсутствует (0 вхождений).
+
+**17.1.** `action_throw_utility` — одно из самых мощных действий в Guardian (CS:GO). Оно позволяет **спавнить гранату в произвольной мировой позиции** с заданной скоростью, независимо от того, где стоит бот.
 
 **17.2.** Синтаксис:
 
@@ -1285,23 +1449,27 @@ children =
 
 **17.4.** Пример: тройная стена огня (`bt_firebomb_wide.kv3`) — **18 incendiary**, не 21. Это **6 X-позиций** (2333…600; X=250 из обычного firebomb сюда не входит) × **3 Y-значения** (−4365/−4650/−4150). Обычный `bt_firebomb` = 7 ✓.
 
-**17.5.** Пример: кольцо дымов вокруг точки (`bt_smoke_ring.kv3`) — 8 дымов по кругу радиусом ~200 юнитов вокруг центра `(1300 -4365)`.
+**17.5.** Пример: кольцо дымов (`bt_smoke_ring.kv3`) — 8 дымов по кругу вокруг центра ≈ `(1390 -4405)` на высоте **Z = 850**; кольцо неровное (радиус ~100–215 юнитов).
 
-**17.6.** Где используется:
+**17.6.** Где используется — **исключительно** `op11_county_2`, 39 вызовов в 5 файлах:
 
-| Файл | Что |
-|---|---|
-| `op11_county_2/bt_firebomb.kv3` | Стена огня из 7 incendiary |
-| `op11_county_2/bt_firebomb_wide.kv3` | Тройная стена огня (18 incendiary) |
-| `op11_county_2/bt_smoke_ring.kv3` | Кольцо дымов |
-| `op11_county_2/bt_smoke_house_rush.kv3` | 3 дыма для раша дома |
-| `op11_county_2/bt_smoke_houses.kv3` | 3 дыма для домов |
+| Файл | Вызовов | Что |
+|---|---|---|
+| `op11_county_2/bt_firebomb.kv3` | 7 | Стена огня из 7 incendiary |
+| `op11_county_2/bt_firebomb_wide.kv3` | 18 | Тройная стена огня |
+| `op11_county_2/bt_smoke_ring.kv3` | 8 | Кольцо дымов |
+| `op11_county_2/bt_smoke_house_rush.kv3` | 3 | 3 дыма для раша дома |
+| `op11_county_2/bt_smoke_houses.kv3` | 3 | 3 дыма для домов |
 
-**17.7.** Это **скриптовые «арт-установки»**, а не обычный бросок. В Co-op используется `action_aim_projectile` (с багом), в Guardian — `action_throw_utility`.
+**17.7.** Это **скриптовые «арт-установки»**, а не обычный бросок. В Co-op используется `action_aim_projectile` (с багом — игнорирует гравитацию), в Guardian — `action_throw_utility`. При этом в `sirocco_2/4/5` (Guardian) throw_utility **не** используется — там те же результаты получают «вручную»: `move_to` в точную позицию → `look_at(input_angles)` → `equip` → `wait` → `pull_trigger`.
 
 ---
 
 ## 18. Координация через глобальные счётчики
+
+> **Note**
+>
+> Пример — CS:GO Guardian (`op09_grunts_card7_2`).
 
 **18.1.** Полный пример из `op09_grunts_card7_2/bt_coordinated_buy.kv3`:
 
@@ -1338,9 +1506,9 @@ children =
 | 7 | Сбрасывает `WaitForCoordinatedBuy = 0` |
 | 8 | Остальные боты видят `WaitForCoordinatedBuy = 1` и идут в `decorator_wait_success timeout = 4 → action_compare_global_counter WaitForCoordinatedBuy = 0` |
 
-**18.3.** `bt_strategy_smoke.kv3` использует ту же схему с счётчиками `PreparingToThrowSmoke`, `ThrowPalaceFlash`, `PositioningForTopSmoke`.
+**18.3.** `bt_strategy_smoke.kv3` (card13) использует ту же схему с счётчиками `PreparingToThrowSmoke`, `ThrowPalaceFlash`, `PositioningForTopSmoke`.
 
-**18.4.** `decorator_wait_success` + `action_compare_global_counter` — стандартная пара для «ждать, пока другой бот что-то сделает».
+**18.4.** `decorator_wait_success` + `action_compare_global_counter` — стандартная пара для «ждать, пока другой бот что-то сделает». Связка `run_once (domain) → set_global_counter → wait_success → compare_global_counter → dec_global_counter` — универсальный каркас координации, формализованный здесь полностью.
 
 ---
 
@@ -1348,7 +1516,7 @@ children =
 
 ### 19.1. `condition_inactive` + `action_commit_suicide`
 
-Из Guardian:
+Из Guardian (CS:GO) — по 50 вхождений каждого узла, все в Guardian-корнях:
 
 ```kv3
 condition_inactive
@@ -1379,13 +1547,13 @@ expiration_time_max = 5
 
 ### 19.4. `decorator_succeed` вокруг `action_coordinated_buy`
 
-В `bt_coordinated_buy.kv3` `action_coordinated_buy` обёрнут в `decorator_succeed` — даже если покупка провалилась, дерево продолжится. Покупка не должна ломать дерево.
+В `bt_coordinated_buy.kv3` `action_coordinated_buy` обёрнут в `decorator_succeed` — даже если покупка провалилась, дерево продолжится. Покупка не должна ломать дерево. Тот же приём стоит вокруг любых «рискованных» действий, чей провал не должен ронять ветку.
 
 ---
 
-## 20. Парашют (CS2 Blacksire)
+## 20. Парашют (Blacksite, CS:GO Guardian)
 
-**20.1.** Уникальная механика CS2 Guardian на карте Blacksire. Боты телепортируются в воздух, получают парашют, и `action_parachute_positioning` рулит диагональным движением.
+**20.1.** Уникальная механика Guardian на карте **Blacksite** (в файлах папка называется `op11_blacksite_*` — «blacksite», не «blacksire»). Боты телепортируются в воздух, получают парашют, и `action_parachute_positioning` рулит диагональным движением. В CS2-дампе этого контента нет.
 
 **20.2.** Условия и действия:
 
@@ -1393,7 +1561,7 @@ expiration_time_max = 5
 |---|---|
 | `condition_has_parachute` | Есть ли парашют |
 | `condition_is_airborne` | Бот в воздухе |
-| `action_parachute_positioning` | Движение по диагонали для парашюта |
+| `action_parachute_positioning` | Движение по диагонали для парашюта; периодически меняет направление (каждые несколько секунд) |
 | `action_acquire_items items = [ "parachute" ]` | Выдать парашют |
 
 **20.3.** Пример из `op11_blacksite_1/bt_default.kv3`:
@@ -1409,48 +1577,50 @@ children =
 ]
 ```
 
-**20.4.** `action_look_at input_location` фиксирует взгляд на точке X. Это нужно, чтобы бот приземлился в нужном месте.
+**20.4.** `action_look_at input_location` фиксирует взгляд на точке X (в дампе — с комментарием `// also look towards the bomb X mark`). Это нужно, чтобы бот приземлился в нужном месте.
 
-**20.5.** Токен-сервис парашюта (исправлено). В `bt_op11_blacksite_1.txt` корневой токен-сервис **есть** в дампе, и токен там **один**:
+**20.5.** Токен-сервис парашюта. В корне `bt_op11_blacksite_1` токен **один**:
 
 ```kv3
 tokens = [ "Parachute" ]
 assignments = [ [ 1000 ] ]
 ```
 
+Число **1000** означает, что движок попытается выдать этот токен до 1000 ботам — то есть **всем** доступным. Это стандартный трюк Valve для режима «всем подряд».
+
 Никаких 40 токенов нет. `Parachute1`…`Parachute40` — это значения **`GroupMemberId`**, которые движок генерирует автоматически из имени токена + номера. В `bt_parachute_1.kv3` используются 40 разных `condition_is_equal` по `GroupMemberId = 'ParachuteN'` (см. §21.2.1 про ключ `domain` у `condition_is_equal`).
 
 ---
 
-## 21. Карты Guardian
+## 21. Карты Guardian (CS:GO-дампы)
 
-**21.1.** Полный список карт в CS2 Guardian-дампах (список неполный — часть модулей в A/B-версиях смещена; полная таблица по 544 файлам — за рамками этого документа):
+**21.1.** Полный список карт в Guardian-дампах (CS:GO; список модулей частичный — полная таблица по 519 файлам выходит за рамки документа):
 
 | Карта | Модули | Особенности |
 |---|---|---|
-| `op09_grunts_card1`, `card1_2`, `card2`, `card4`, `card6_1`, `card6_2`, `card7_1`, `card7_2`, `card8`, `card9`, `card10`, `card11`, `card12`, `card13`, `card14`, `card15` | Базовые grunts-стратегии | Токен-сервисы, `action_teleport`, `action_crouch` |
-| `op10_ancient_a/b` | Ancient A/B | 7 смоков/молотовых + `LongAwp`; в `ancient_b` — LeftSmoke/RightSmoke/TunRush |
-| `op10_apollo` | Apollo | Пистолетные раунды |
-| `op10_dust2_a/b` | Dust2 A/B | Car/Doors/Plat/WindowSmoke — **b**; Goose — **a**; CatSmoke, CrossSmoke |
+| `op09_grunts_card1`, `card1_2`, `card2`, `card4`, `card6_1`, `card6_2`, `card7_1`, `card7_2`, `card8`, `card9`, `card10`, `card11`, `card12`, `card13`, `card14`, `card15` | Базовые grunts-стратегии | Токен-сервисы, `action_teleport`, `action_crouch`; card2 — `subtree params`; card1 — `BombSiteArea` |
+| `op10_ancient_a/b` | Ancient A/B | 7 смоков/молотовых + `LongAwp`; в `ancient_b` — LeftSmoke/RightSmoke/TunRush; в `bt_long_awp` — закомментированный `// type = "action_RIGHT_CLICK?"` |
+| `op10_apollo` | Apollo | Пистолетные раунды: `assign_guardian_loadout` по волнам; все лодауты — пистолеты (usp/hkp2000 → elite/tec9/fiveseven/cz75a → revolver/deagle, волны 1–4) |
+| `op10_dust2_a/b` | Dust2 A/B | a: Goose, CatSmoke, CrossSmoke, car_molly, goose_molly; b: Car/Doors/Plat/Window, car_smoke, doors_smoke, plat_smoke, window_molly/smoke |
 | `op10_engage_a/b` | Engage A/B | 5+5 молотовых + rush; в `engage_a` — `floor_molly_1..5`, `top_molly_1..5`, `top_rush_1..5`; `bt_boost_molly` использует `action_crouch` |
-| `op10_inferno_a/b` | Inferno A/B | ASiteFlash, BalconySmoke, DefaultASmoke, MotoSmoke, PitSmoke, CarMolly, SandwichMolly, BananaHE, BananaFlash, SmokeCoffins, SmokeCT |
-| `op10_mirage_a/b` | Mirage A/B | StairsSmoke, CTSmoke, JungleSmoke, JungleSmoke2, TripleSmoke, SiteSmoke, MainFlash, PalaceFlash, BenchSmoke, MarketSmoke, MarketWindowSmoke, RightArchSmoke, ArchMolly; в `mirage_a` — DarkMolly, SandwichMolly |
-| `op10_nuke_a/b` | Nuke A/B | HeavenSmoke, HutFlash, MiniFlash, HutMolly, ControlSmoke; в `nuke_b` — RampSmokeLeft (в a — Right) |
-| `op10_overpass_a/b` | Overpass A/B | AFlash, LongFlash, BankSmoke, DumpsterSmoke, LongSmokeTeleport, MiddleASmoke, BarrelsMolly, BSiteFlash, BSiteSmoke, ConstructionSmoke, HeavenSmoke, MonsterFlash; в `overpass_a` — TruckMolly, TruckSmoke |
+| `op10_inferno_a/b` | Inferno A/B | a: ASiteFlash, BalconySmoke, DefaultASmoke, MotoSmoke, PitSmoke, CarMolly, SandwichMolly, BananaHE, BananaFlash, SmokeCoffins, SmokeCT, rush_apts/patio/arch (+_delay); b: strat_b_*, ct_church, ct_spawn, no_strat_b |
+| `op10_mirage_a/b` | Mirage A/B | StairsSmoke, CTSmoke, JungleSmoke (×2), TripleSmoke, SiteSmoke, MainFlash, PalaceFlash, BenchSmoke, MarketSmoke, MarketWindowSmoke, RightArchSmoke, ArchMolly; в `mirage_a` — DarkSmoke, DarkMolly, SandwichMolly + rush-модули |
+| `op10_nuke_a/b` | Nuke A/B | HeavenSmoke, HutFlash, MiniFlash, HutMolly, ControlSmoke; в `nuke_a` — RampSmokeRight, в `nuke_b` — RampSmokeLeft, dark_molly, ramp_flash |
+| `op10_overpass_a/b` | Overpass A/B | a: AFlash, LongFlash, BankSmoke, DumpsterSmoke, LongSmokeTeleport, MiddleASmoke, TruckMolly, TruckSmoke; b: BarrelsMolly, BSiteFlash, BSiteSmoke, ConstructionSmoke(water), HeavenSmoke, MonsterFlash, MonsterSmoke |
 | `op10_train_a/b` | Train A/B | LaneSmoke, RightRedSmoke, EBoxSmoke, IvySmoke, SafeSmoke, ConnSmoke, EarlyBSmoke, LeftBSiteSmoke, LowerBSmoke, BPopFlash, UpperPopFlash, UpperSafeSmoke |
 | `op10_vertigo_a/b` | Vertigo A/B | AEntrySmoke, AFlash, LeftASmoke, RightASmoke, BShortFlash, CrossBSmoke, LeftBSmoke, MidPopFlash; в `vertigo_a` — HeadshotMolly |
 | `op11_basalt_a/b` | Basalt A/B | CTSmoke, PlatSmoke, SiteMolly, CubbyMolly, EntryFlash; в `basalt_b` — DoorSmoke, SiteSmoke1/2, CornerMolly1/2, CubbyFlash |
-| `op11_blacksite_1` | Blacksire 1 | **Парашют** (`Parachute1`…`Parachute40` через `GroupMemberId`); локальный override зрения (см. §21.3) |
-| `op11_blacksite_2` | Blacksire 2 | EastSmoke, EastSmoke2, WestSmoke, WestSmoke2, WestFlash, EastFlash, WestMolly, RushWest; override зрения 1500→1850 |
-| `op11_blacksite_3` | Blacksire 3 | MollyStrat, HEStrat, TunnelStrat, BehindStrat (домены на 5 ботов, см. §23) |
-| `op11_blacksite_4` | Blacksire 4 | DivebombMolly, MollyOne, MollyTwo, SmokeTwo, TouristStairwell, TouristGround, TouristMarket, ConstructionGreen, ConstructionBlue, Echo1, DivebombBridge, DivebombStreet, Divebomb1, Divebomb2; override зрения 1500→1850 |
+| `op11_blacksite_1` | Blacksite 1 | **Парашют** (`Parachute1`…`Parachute40` через `GroupMemberId`); override зрения: сфера 25000 (см. §21.3) |
+| `op11_blacksite_2` | Blacksite 2 | EastSmoke, EastSmoke2, WestSmoke, WestSmoke2, WestFlash, EastFlash, WestMolly, RushWest; override зрения 1500→1850 |
+| `op11_blacksite_3` | Blacksite 3 | MollyStrat, HEStrat, TunnelStrat, BehindStrat (домены на 5 ботов, см. §23) |
+| `op11_blacksite_4` | Blacksite 4 | DivebombMolly, MollyOne, MollyTwo, SmokeTwo, TouristStairwell, TouristGround, TouristMarket, ConstructionGreen, ConstructionBlue, Echo1, DivebombBridge, DivebombStreet, Divebomb1, Divebomb2; override зрения 1500→1850 |
 | `op11_county_1` | County 1 | NorthShield, SouthShield, EastShield, NorthFlash, NorthFlash2, SouthFlash, SouthFlash2, WestFlash, WestFlash2, EastFlash |
-| `op11_county_2` | County 2 | **Скриптовые установки гранат** (firebomb, firebomb_wide, smoke_ring) + `action_entity_accept_input`; `bt_bot_1..5`; `run_once domain = "'AllBots'"` (исключение кавычек); override зрения 1500→4000 |
+| `op11_county_2` | County 2 | **Скриптовые установки гранат** (firebomb, firebomb_wide, smoke_ring, smoke_house_rush, smoke_houses) + `action_entity_accept_input`; `bt_bot_1..5`; `run_once domain = "'AllBots'"` (исключение кавычек); override зрения 1500→4000 |
 | `op11_extraction` | Extraction | CTSmoke, RoomSmoke, SiteMolly, EntryNade, EntryFlash |
 | `op11_insertion2_a/b` | Insertion 2 A/B | EntryFlash, EntryFlash2, BackFlash, EntrySmoke, SideSmoke, DockSmoke, BackSmoke, RushEntry, RushSide, RushDock |
 | `op11_ravine` | Ravine | CTSmoke, SiteSmoke, SiteMolly, CubbyMolly, EntryFlash, EntryFlash2 |
 | `op11_sirocco_1` | Sirocco 1 | RushNorth, RushEast, RushSouth, RushWest, EastSmoke, WestSmoke, WestNade, SouthFlash, RushIvy |
-| `op11_sirocco_2` | Sirocco 2 | NorthSmoke, SouthSmoke, NorthMolly, SouthMolly, RushBeach, RushOil, RushHill, RushApc; override зрения 1500→4000 |
+| `op11_sirocco_2` | Sirocco 2 | NorthSmoke, SouthSmoke, NorthMolly, SouthMolly, RushBeach, RushOil, RushHill, RushApc; override зрения 1500→**1850** |
 | `op11_sirocco_4` | Sirocco 4 | AttackLowerEast/North/West, AttackMidEast/West, AttackUpperEast/North/West, SmokeMidWest, SmokeUpperNorth, MollyUpperEast, FlashMidWest; override зрения 1500→4000 |
 | `op11_sirocco_5` | Sirocco 5 | AttackUpperS, AttackUpperSW, AttackMidS, AttackMidSE, AttackMidSW, AttackLowerS, AttackLowerSE, AttackLowerSW, FlashSite, SmokeBarrels, SmokeBarrels2, MollyBox; override зрения 1500→4000 |
 
@@ -1458,29 +1628,30 @@ assignments = [ [ 1000 ] ]
 
 | Значение | Где |
 |---|---|
-| `10` | Co-op (`op11_insertion2_a/b`, все Co-op-корни) |
-| `15` | **Три** корня: `bt_grunts_card13.txt` (без префикса `op09`!), `bt_op09_grunts_card1_2.txt`, `bt_op09_grunts_card6_1.txt` |
+| `10` | Co-op (`op11_insertion2_a/b`, все Co-op-корни), CS2 practice-корень и остальные 48 Guardian-корней |
+| `15` | Ровно **три** корня: `bt_grunts_card13.txt` (без префикса `op09`!), `bt_op09_grunts_card1_2.txt`, `bt_op09_grunts_card6_1.txt` |
 
-**21.2.1.** `condition_is_equal` и `domain` (добавлено):
+**21.2.1.** `condition_is_equal` и `domain`:
 
 `condition_is_equal` поддерживает **незадокументированный** ключ `domain` (string). Используется 40 раз в `bt_parachute_1.kv3`: `domain = "'ParachuteN'"` на каждой проверке `GroupMemberId`. Судя по семантике (совпадает с `decorator_try_lock`), это индивидуальный лок на каждого бота. ⚠️ Назначение не подтверждено официальной документацией.
 
-**21.3.** Локальные override-ы `bt_memorize_enemies_vision` в op11 (добавлено):
+**21.3.** Локальные override-ы `bt_memorize_enemies_vision` в op11:
 
 Целый недокументированный паттерн «настройки зрения под карту». Общий модуль видит на 1500, локальные копии — дальше:
 
 | Карта | Отличие от общего модуля |
 |---|---|
-| `blacksite_2`, `blacksite_4` | `cutoff_distance` 1500 → 1850 |
-| `county_2`, `sirocco_2/4/5` | `cutoff_distance` 1500 → 4000 |
-| `blacksite_1` | `sensor_shape_sphere` `radius` 25000 + `cutoff_distance` 25000 (сенсор «видит» всю карту; LOS-фильтр остаётся в `picker_visible`) |
+| `blacksite_2`, `blacksite_4`, `sirocco_2` | `cutoff_distance` 1500 → **1850** |
+| `county_2`, `sirocco_4`, `sirocco_5` | `cutoff_distance` 1500 → **4000** |
+| `blacksite_1` | `sensor_shape_sphere` `radius` = **25000** + `cutoff_distance` = **25000** — сенсор «видит» всю карту; LOS-фильтр остаётся в `picker_visible` |
 
-**21.4.** Токен-сервисы Practice/Guardian (добавлено):
+**21.4.** Токен-сервисы Guardian/Practice:
 
 | Карта | Токены | Assignments |
 |---|---|---|
 | `op10_ancient_a` | 9 (`CoverSmoke`…`LongAwp`) | 5 вариантов раздачи |
-| `op09_grunts_card12` | 5 (`StratLobby`, `StratOutside`, `StratHeaven`, `NoStratSqueaky`, `NoStartLobby`) | См. §6.8.3 |
+| `op09_grunts_card2` | 5 (`StratLobby`, `StratOutside`, `StratHeaven`, `NoStratSqueaky`, `NoStartLobby`) | См. §6.8.3; здесь же 15 использований `subtree params` |
+| `op09_grunts_card12` | 3 (`StratAtrium`, `StratLobby`, `StratUpOffice`) | 6 вариантов раздачи |
 | `practice/newplayer_dust2_01` | 10 (`t_1..t_5`, `ct_1..ct_5`) | `[[1,1,1,1,1,1,1,1,1,1]]` + `team_restriction` T/CT |
 | `op11_blacksite_1` | 1 (`Parachute`) | `[[1000]]` (см. §20.5) |
 | `op11_county_2` | `Bot1`…`Bot5` (в корне) | См. §14.5 |
@@ -1555,25 +1726,25 @@ assignments = [ [ 1000 ] ]
 
 ## 23. Полный список доменов
 
-| Домен | Где | Что блокирует |
-|---|---|---|
-| `"AllBots"` (без внутренних кавычек) | `memory_to_expire`, `input_domain`, `output_domain`, `decorator_run_once` | Общая память всех ботов; блокировка для `run_once` |
-| `"'AllBots'"` (с внутренними кавычками — **исключение!**) | `op11_county_2`, волна 1, `decorator_run_once` перед `action_entity_accept_input` для дверей | Единственный случай с кавычками для `AllBots` |
-| `"'StratTokens'"` | `decorator_token_service` | Токены стратегий |
-| `"'PressAntennaButton'"` | `rush/bt_default` | Нажатие кнопки антенны |
-| `"'DefuseBombIfNearby'"` | `practice/modules/bt_defuse_bomb_if_nearby` | Разминирование |
-| `"'PickupBombIfNearby'"` | `practice/modules/bt_pickup_bomb_if_nearby` | Подбор бомбы |
-| `"'PickupHostage'"` | `op11_insertion2_a/b/bt_pickup_hostage` | Подбор хостажа |
-| `"'CoordinatedBuy'"` | `op09_grunts_card7_2/bt_coordinated_buy` | Координированная покупка |
-| `"'SetupGlobalCounters'"` | `decorator_run_once` в card7_2 | Установка счётчиков |
-| `"'StrategySmoke'"` | `op09_grunts_card13/bt_strategy_smoke` | Стратегический дым |
-| `"'StrategyGrenade1/2/3'"` | `op09_grunts_card13/bt_strategy_grenades` | Стратегические гранаты |
-| `"'HoldBackOnFirstWaveBot1/2/3'"` | `op09_grunts_card6_2` | Задержка ботов на первой волне |
-| `"'TunnelStrat1'"`…`"'TunnelStrat5'"` | `op11_blacksite_3` | Пер-ботовый туннель (по домену на каждого из 5 ботов) |
-| `"'MollyStrat1'"`…`"'MollyStrat5'"` | `op11_blacksite_3` | Пер-ботовая молотов (5 ботов) |
-| `"'HEStrat1'"`…`"'HEStrat5'"` | `op11_blacksite_3` | Пер-ботовая HE (5 ботов) |
-| `"'BehindStrat1'"`…`"'BehindStrat5'"` | `op11_blacksite_3` | Пер-ботовая заход с тыла (5 ботов) |
-| `"'ParachuteN'"` (N = 1..40) | `bt_parachute_1.kv3` — `condition_is_equal domain`, не `try_lock`! | Индивидуальный «лок» на бота; семантика ⚠️ не подтверждена |
+| Домен | Игра | Где | Что блокирует |
+|---|---|---|---|
+| `"AllBots"` (без внутренних кавычек) | обе | `memory_to_expire`, `input_domain`, `output_domain`, `decorator_run_once` | Общая память всех ботов; блокировка для `run_once` |
+| `"'AllBots'"` (с внутренними кавычками — **исключение!**) | CS:GO | `op11_county_2`, волна 1, `decorator_run_once` перед `action_entity_accept_input` для дверей | Единственный случай с кавычками для `AllBots`; только один бот жмёт все кнопки дверей |
+| `"'StratTokens'"` | обе | `decorator_token_service` | Токены стратегий |
+| `"'PressAntennaButton'"` | CS2 | `rush/bt_default` | Нажатие кнопки антенны |
+| `"'DefuseBombIfNearby'"` | CS2 | `practice/modules/bt_defuse_bomb_if_nearby` | Разминирование |
+| `"'PickupBombIfNearby'"` | обе | `practice/modules/bt_pickup_bomb_if_nearby` | Подбор бомбы |
+| `"'PickupHostage'"` | CS:GO | `op11_insertion2_a/b/bt_pickup_hostage` | Подбор хостажа |
+| `"'CoordinatedBuy'"` | CS:GO | `op09_grunts_card7_2/bt_coordinated_buy` | Координированная покупка |
+| `"'SetupGlobalCounters'"` | CS:GO | `decorator_run_once` в card7_2 | Установка счётчиков |
+| `"'StrategySmoke'"` | CS:GO | `op09_grunts_card13/bt_strategy_smoke` | Стратегический дым |
+| `"'StrategyGrenade1/2/3'"` | CS:GO | `op09_grunts_card13/bt_strategy_grenades` | Стратегические гранаты |
+| `"'HoldBackOnFirstWaveBot1/2/3'"` | CS:GO | `op09_grunts_card6_2` | Задержка ботов на первой волне |
+| `"'TunnelStrat1'"`…`"'TunnelStrat5'"` | CS:GO | `op11_blacksite_3` | Пер-ботовый туннель (по домену на каждого из 5 ботов) |
+| `"'MollyStrat1'"`…`"'MollyStrat5'"` | CS:GO | `op11_blacksite_3` | Пер-ботовая молотов (5 ботов) |
+| `"'HEStrat1'"`…`"'HEStrat5'"` | CS:GO | `op11_blacksite_3` | Пер-ботовая HE (5 ботов) |
+| `"'BehindStrat1'"`…`"'BehindStrat5'"` | CS:GO | `op11_blacksite_3` | Пер-ботовый заход с тыла (5 ботов) |
+| `"'ParachuteN'"` (N = 1..40) | CS:GO | `bt_parachute_1.kv3` — `condition_is_equal domain`, не `try_lock`! | Индивидуальный «лок» на бота; семантика ⚠️ не подтверждена |
 
 > **Warning**
 >
@@ -1586,11 +1757,177 @@ assignments = [ [ 1000 ] ]
 | | `action_aim_projectile` | `action_throw_utility` |
 |---|---|---|
 | Использует позицию бота | Да | Нет (спавнит в `location`) |
-| Учитывает траекторию | Нет (баг) | Задаётся вручную через `velocity` |
-| Где используется | Co-op `bt_throw_utility_if_covered` | CS2 Guardian `county_2`, `sirocco_2/4/5` |
+| Учитывает траекторию | Нет — полностью игнорирует гравитацию и физику (баг) | Задаётся вручную через `velocity` |
+| Где используется | Co-op `bt_throw_utility_if_covered` (CS:GO) | Только `op11_county_2` (CS:GO Guardian), 39 вызовов |
 | Точность | Низкая | Высокая (скриптовая) |
 | Пишет в blackboard | Углы (`output`) | Ничего |
 | Читает из blackboard | `input` (позиция) | — |
 | Когда использовать | Нужен «естественный» бросок от бота | Нужна точная установка дыма/огня/молотова |
 
+> **Note**
+>
+> Третий путь — «ручной» скриптовый паттерн из sirocco_2/4/5 (Guardian): `move_to` в точную позицию → `look_at(input_angles)` → `equip` → `wait` → `pull_trigger`. Даёт точность throw_utility без спавна гранаты «из воздуха».
+
 ---
+
+# Часть VI. Приложения
+
+## 25. Инвентарь узлов и частоты
+
+Проверенные счётчики по дампам (полная таблица всех уникальных `type =` генерируется по дампам; здесь — сверенные значения):
+
+| Узел / счётчик | CS:GO | CS2 | Где |
+|---|---|---|---|
+| `decorator_run_once` | ×949 | ×11 | Почти все ×949 — Guardian |
+| `action_teleport` | ×449 | 0 | Все — Guardian |
+| `condition_inactive` + `action_commit_suicide` | ×50 + ×50 | 0 | Все — Guardian (предохранители §19.1) |
+| `action_throw_utility` | ×39 | 0 | Только `op11_county_2` (5 файлов) |
+| `succeed_after_first = 1` | ×2 | 0 | `op09_grunts_card2/bt_strat_hold_position` |
+| `subtree params` | ×15 | 0 | `op09_grunts_card2` (см. §5.1) |
+| `action_jump` | 25 файлов | — (Co-op rush) | Почти все — jump-throw утилити (§15.12) |
+| `ratio = 1` (`action_pull_trigger`) | ×1 | ×1 | `bt_heal_if_needed` (модули общие) |
+| `@mp_guardian_target_site` | ×47 | 0 | Guardian |
+| `@mp_plant_c4_anywhere` | ×18 (14+4) | 0 | Guardian |
+| `RoundNumber` | — | ×138 | Practice |
+| `TeamName` | — | ×4 | Practice |
+| `domain = "'AllBots'"` | ×1 | 0 | `op11_county_2` |
+| Закомментированные subtree в корнях op10/11 | 62 | — | После Item Strategy: parallel[FleeAreaDamageThreats, repeat LookAround] (активный — только в Co-op autumn) |
+
+## 26. Мёртвые ключи и неиспользуемые узлы
+
+### 26.1. Мёртвые ключи (есть в файлах/документации, но движком не читаются)
+
+| Ключ | Узел | Статус в дампах |
+|---|---|---|
+| `acquire_only` | `action_aim` | Передаётся в `bt_face_damage_inflictor`, `bt_look_around`; игнорируется |
+| `ratio` | `action_pull_trigger` | ×1 в `bt_heal_if_needed`; игнорируется. Предположительно задумывался как длительность удержания ЛКМ (0.0–1.0), но по Source2 Wiki не читается |
+| `distance_threshold` | `decorator_picker_blocked_by_smoke` | В файлах есть, игнорируется |
+| `chatter_outnumbered_threshold` | `decorator_bot_service` | Не встречается |
+| `attacker_filter` | `decorator_sensor` | Не встречается |
+| `wait_modulo_tick_mod/add` | `action_wait` | Не встречаются |
+| `team` | `action_choose_team_spawn_area` | Не встречается |
+| `amount` | `decorator_repeat` | Не встречается ни разу (все 7 вхождений `amount` — это `decorator_tag_threshold amount = 2`) |
+| `BT_ACTION_MOVETO_SAFEST_ROUTE` | `action_move_to route_type` | 0 использований — только FASTEST |
+
+### 26.2. Узлы, не встречающиеся ни разу (0 в 544 + 57 файлах)
+
+| Условия | Декораторы | Действия |
+|---|---|---|
+| `condition_is_greater` | `decorator_invert` | `action_hide` |
+| `condition_is_less` | `decorator_find_utility_strat` | `action_standup` |
+| `condition_is_reloading` | `decorator_route_service` | `action_secondary_attack` |
+| `condition_is_weapon_suitable` (⚠️ по VDC работает как `condition_is_weapon_equipped` — баг) | `decorator_set_barrier` | `action_reload` |
+| `condition_barrier` | — | `action_custom_buy` |
+| — | — | `action_drop_active_weapon` |
+| — | — | `action_inspect_current_weapon` |
+
+### 26.3. «Unused» по Source2 Wiki, но реально используются в Guardian/Co-op
+
+Source2 Wiki помечает ~36 узлов как «существуют, но не используются в официальных деревьях», потому что смотрит только на deathmatch/armsrace/rush/practice. В Guardian/Co-op они активно используются — поэтому ваша вики здесь точнее официальной:
+
+| Узел | Где реально используется |
+|---|---|
+| `action_aim_projectile` | Co-op `bt_throw_utility_if_covered` |
+| `action_throw_utility` | `op11_county_2` (×39) |
+| `action_parachute_positioning` + `condition_has_parachute` + `condition_is_airborne` | `op11_blacksite_1` (парашют, §20) |
+| `action_coordinated_buy` | `op09_grunts_card7_2` |
+| `decorator_wait_success` | Guardian (координация, §18) |
+| `condition_inactive` + `action_commit_suicide` | Guardian (предохранители, ×50) |
+| `action_teleport` | Guardian (×449) |
+| `action_set_value_vector` / `action_set_value_float` | Co-op `bt_determine_rush_center` и др. |
+| `action_entity_accept_input` | `op11_county_2` (×6) |
+| `action_assign_guardian_loadout` / `action_choose_guardian_bomb_plant_location` / `action_select_areas_within_radius` | Guardian (лодауты по волнам, закладка, зоны) |
+
+## 27. Анти-паттерны
+
+| ❌ Как НЕ надо | Почему ломается | ✅ Как надо |
+|---|---|---|
+| `action_attack` без предварительного `action_aim` с флагом `ready` | Бот стреляет «в ноги» или в случайную сторону, пока крутится | `sequencer[repeat aim Enemy ready="AimReady", repeat attack Enemy ready="AimReady"]]` — как в `bt_attack` |
+| `action_move_to` без обёртки `decorator_repeat` | Бот делает один «шаг» (один тик pathfinding) и останавливается: узел возвращает `running`, но родительский sequencer уходит дальше | Оборачивать движение в `repeat` (или весь sequencer) |
+| `decorator_tag_entity` без `expiration_time` и без последующего `BT_DECORATOR_TAG_ENTITY_CLEAR` | Утечка тегов: бот навсегда считает врага «помеченным», ломается логика `bt_plant_bomb_if_covered` и подобных | `expiration_time = 1` и/или CLEAR перед AT_LEAST — как в `bt_pickup_hostage_if_covered` |
+| `decorator_picker_max_score` без ранкера | Вернёт первую сущность массива, а не ближайшую/лучшую | `decorator_ranker_dist` перед `max_score` |
+| `action_coordinated_buy` вне `run_once` | Два бага: принудительная покупка всех + наследование предметов по массиву | `run_once domain = "'CoordinatedBuy'"` + `wait_success` (§18) |
+| Копирование дерева целиком без проверки веток | Мёртвые side-effect'ы: `ShouldBuy` в Arms Race/Practice пишется, но не читается | Проверять, что выход сервиса реально читается ниже |
+| Копипаст закомментированных блоков из op10/11-корней | 62 закомментированных subtree — мусор в дереве и ложное чувство функции | Разкомментировывать осознанно (активный parallel[Flee…, LookAround] — только в Co-op autumn) |
+
+## 28. Известные баги движка
+
+| Баг | Детали | Обходной путь |
+|---|---|---|
+| `action_aim` не разскопивается со снайперки | Прицел «залипает» до смены оружия | `action_equip_weapon` с тем же оружием / `BEST` сбрасывает прицел (unscope) |
+| `action_aim_projectile` игнорирует гравитацию и физику полёта | Просто пишет вектор направления бот→цель в углы; граната летит неточно | `action_throw_utility` (§17) или скриптовый look_at-паттерн (sirocco) |
+| `action_coordinated_buy` — баг 1 | Один бот может заставить покупать всю команду | Строго внутри `run_once` с уникальным `domain` |
+| `action_coordinated_buy` — баг 2 (наследование предметов) | Внутренний буфер покупок не очищается между ботами: боты ниже по массиву наследуют предметы от ботов выше | Тот же `run_once`-паттерн + `wait_success` для остальных |
+| `decorator_sensor` с `team_filter = "ENEMY"` для гранат | Возвращает гранаты T-команды независимо от команды бота | `OPPOSITE` вместо `ENEMY` (подтверждено VDC) |
+| `action_jump` сбрасывает `movement_type` | WALK превращается в RUN после прыжка | Переустанавливать `movement_type = "BT_ACTION_MOVETO_WALK"` после `action_jump` |
+| Мёртвый `ShouldBuy` | В Arms Race и Practice пишется, но не читается | Покупка через `item_strategy` (`run_once → action_buy`), как у Valve |
+| `condition_is_weapon_suitable` работает как `condition_is_weapon_equipped` | По VDC — баг движка | Не использовать для проверки «подходит ли оружие по дистанции» |
+| `// type = "action_RIGHT_CLICK?"` | В `op10_ancient_a/bt_long_awp` Valve хотела ПКМ-действие (зум AWP), но закомментировала | Тривия; используйте `action_equip_weapon` для скоупа |
+
+## 29. Чтение дампов, структура файлов и история
+
+### 29.1. Как читать All-in-One дамп
+
+| Что | Значение |
+|---|---|
+| `.txt` вместо `.kv3` | Дампы извлечены с переименованием; в игре файлы — `.kv3`. Внутри — KV3-разметка |
+| `===== scripts\ai\...` | Разделитель между файлами в «склеенном» All-in-One: путь к следующему файлу |
+| Поиск по дампу | Ищите `type = "..."` с учётом разделителей; помните, что вхождения одного узла могут лежать в разных файлах с одинаковым именем в разных папках (`modules/`, `guardian/modules/...`) |
+
+### 29.2. Дерево папок `scripts/ai/`
+
+```
+scripts/ai/
+├── armsrace/                      (CS2)
+│   ├── bt_default.kv3
+│   └── bt_config.kv3
+├── deathmatch/                     (CS2 + CS:GO)
+│   ├── bt_default.kv3
+│   └── bt_config.kv3
+├── rush/                           (CS2)
+│   ├── bt_default.kv3
+│   └── bt_config.kv3
+├── practice/                       (CS2)
+│   ├── newplayer_dust2_01.kv3
+│   ├── bt_config.kv3
+│   └── modules/ (bt_t_1..5, bt_ct_1..5, bt_goto_*, bt_acquire_*_weapons, …)
+├── modules/                        (общие, 14 шт.; байт-идентичны между играми)
+│   └── bt_attack, bt_memorize_*, bt_plant_bomb_*, bt_defuse_*, bt_pickup_*, …
+├── coop/                           (CS:GO)
+│   ├── bt_config.kv3
+│   ├── bt_guard / bt_roam / bt_rush / bt_sniper .kv3
+│   └── autumn/ (+ autumn/modules/)
+└── guardian/                       (CS:GO, 519 файлов)
+    ├── bt_config.kv3
+    ├── bt_op09_grunts_card*.kv3
+    ├── bt_op10_<map>_a/b.kv3
+    ├── bt_op11_<map>_*.kv3
+    └── modules/
+        ├── op09_grunts_card2/ (bt_strat_*, bt_strat_hold_position)
+        ├── op09_grunts_card7_2/ (bt_coordinated_buy)
+        ├── op10_<map>_a/ (bt_cover_smoke, bt_cross_smoke, bt_long_awp, …)
+        └── op11_county_2/ (bt_firebomb*, bt_smoke_*, bt_bot_1..5), op11_blacksite_1/ (bt_parachute_1), …
+```
+
+### 29.3. Упаковка и поставка деревьев
+
+| Факт | Детали |
+|---|---|
+| Упаковка в BSP | С 01.09.2020 деревья можно паковать в сам BSP-файл карты |
+| Workshop-аддоны | Могут поставлять деревья в свой `scripts/ai/` |
+| Per-spawn дерево | Ключ `behavior_tree_file` на `info_enemy_terrorist_spawn` (CS:GO Co-op Strike) — назначает дерево конкретной спавн-энтити |
+| Смена дерева без рестарта | При включённых респавнах достаточно убить бота — при возрождении он возьмёт дерево заново (полезно при отладке) |
+
+### 29.4. История
+
+| Дата | Событие |
+|---|---|
+| 16.09.2019 | Behavior Trees добавлены в CS:GO (Co-op Strike / Guardian) |
+| 01.09.2020 | Деревья можно паковать в BSP |
+| 2023 (CS2) | BT переработаны: конфиги упрощены до 13 строк, добавлены `append_items`, hostage-сенсор в DM, Practice-дерево newplayer_dust2_01 |
+
+---
+
+> **Note**
+>
+> Если нужна полная таблица всех 519 Guardian-файлов по картам или полный инвентарь всех `type =` со счётчиками — их можно сгенерировать напрямую из дампов; каркас разделов §25–§26 для этого уже готов.
