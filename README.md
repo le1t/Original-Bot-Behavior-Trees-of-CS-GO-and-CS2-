@@ -1595,20 +1595,3 @@ assignments = [ [ 1000 ] ]
 | Когда использовать | Нужен «естественный» бросок от бота | Нужна точная установка дыма/огня/молотова |
 
 ---
-
-## 📝 Финальный чек-лист
-
-Перед тем как залить дерево на сервер:
-
-1. ✅ Заголовок KV3 присутствует.
-2. ✅ `config` указывает на правильный конфиг (13 строк для CS2 Deathmatch/Rush/Practice/ArmsRace, 20 — для CS2 Co-op/Guardian и для **всех** CS:GO-конфигов).
-3. ✅ Порядок строк в `attack` соблюдён.
-4. ✅ `domain`-строки с внутренними одинарными кавычками там, где нужно (исключение — `"'AllBots'"` в `op11_county_2`).
-5. ✅ `subtree params` — только `int`/`string` (и в дампах `params` не используется — см. §5.1).
-6. ✅ `mp_bot_ai_bt_clear_cache` выполнен после правок.
-7. ✅ `developer 1` — проверить `[AI BT]: Loaded behavior tree`.
-8. ✅ Если используется `action_coordinated_buy` — он обёрнут в `decorator_run_once`.
-9. ✅ Если используется `action_throw_utility` — `location` и `velocity` заданы в мировых координатах.
-10. ✅ Если используется парашют — `condition_has_parachute` + `condition_is_airborne` + `action_parachute_positioning`.
-
----
