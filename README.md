@@ -1,11 +1,5 @@
 # 🤖 Behavior Trees для ботов в CS:GO и CS2
 
-> **Note**
->
-> Практическое руководство по KV3-деревьям поведения ботов в Counter-Strike: Global Offensive и Counter-Strike 2. Основано на официальных дампах KV3-файлов (CS:GO — 544 файла, CS2 — 57 файлов) и страницах Valve Developer Community / Source2 Wiki.
->
-> **Происхождение данных.** Разделы про Guardian и Co-op основаны на **CS:GO-дампах** — в CS2-дампе Guardian/Co-op-деревьев нет вообще. Разделы про Practice, Rush, Arms Race и Deathmatch — на **CS2-дампах**. CS2 All-in-One неполный (57 файлов против 544) и содержит только armsrace, deathmatch, practice, rush и общие модули. Не смешивайте игры при будущих правках.
-
 ### 🏷️ Легенда статусов
 
 | Значок | Смысл |
