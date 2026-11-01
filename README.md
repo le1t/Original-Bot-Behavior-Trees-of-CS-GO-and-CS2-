@@ -131,7 +131,7 @@ mp_restartgame 1
 - ⚠️ **armsrace/bt_default.kv3 ссылается на scripts/ai/deathmatch/bt_config.kv3**, а не на собственный конфиг (хотя сам armsrace-конфиг существует и байт-идентичен остальным).
 - ⚠️ В practice **два дерева**: newplayer_dust2_01.kv3 (тренировочное — назначается gamemode_new_user_training.cfg) и **bt_default.kv3** — почти точная копия CS2 Deathmatch-дерева без hostage-сенсора, с живой buy-веткой (см. §14.4.2).
 - ⚠️ У Practice отдельный конфиг scripts/ai/practice/bt_config.kv3 — в CS2 он байт-идентичен остальным трём CS2-конфигам.
-- ⚠️ CS:GO-конфиги не идентичны между собой: coop и deathmatch различаются только look_around_* (для low: 0.65/0.1/0.5 против 0.9/0.4/0.6), а guardian — отдельный «замедленный» конфиг: в блоках low…elite отличается почти всем, а в блоке default — практически только строкой RIFLE (см. §4.6.4).
+- ⚠️ CS:GO-конфиги не идентичны между собой: coop и deathmatch различаются только look_around_* (для low: 0.65/0.1/0.5 против 0.9/0.4/0.6), а guardian — отдельный «замедленный» конфиг: в default отличается только строка RIFLE, в low/fair/normal — почти всеми aim/look/reaction-ключами, в tough…elite — только reaction_time и строкой RIFLE (см. §4.6.4).
 
 **1.6.1.** Официальные режимы выставляют mp_bot_ai_bt в своих конфигах режимов:
 
@@ -380,9 +380,9 @@ mp_restartgame 1
 
 **4.6.4.** Guardian — отдельный «замедленный» конфиг, но важно, **на каком уровне** смотреть различия:
 
-- В блоке **default** guardian отличается от deathmatch/coop **практически только строкой RIFLE** (0.25/0.55/0.0/0.95/0.25 против 0.22/0.07/0.0/0.45/0.15) — остальные ключи совпадают.
-- В блоках **low/fair/normal** отличий много — почти все aim/look/reaction-ключи.
-- В блоках **hard/very_hard/expert/elite** отличий снова меньше.
+- В блоке **default** guardian отличается от deathmatch/coop **практически только строкой RIFLE** (0.25/0.55/0.0/0.95/0.25 против 0.22/0.07/0.0/0.45/0.15) — остальные ключи совпадают (проверено построчным diff).
+- В блоках **low/fair/normal** отличий много — почти все aim/look/reaction-ключи (Guardian «замедлен»: acquisition lerp 0.8/0.7/0.6 против 0.5/0.45/0.4, tracking lerp 1.0/0.9/0.85 против 0.65/0.55/0.5, reaction_time 0.85/0.8/0.65 против 0.5/0.5/0.4).
+- В блоках **tough/hard/very_hard/expert/elite** отличий снова меньше — ровно два: **reaction_time** (Guardian 0.5/0.45/0.35/0.3/0.25 против 0.35/0.3/0.25/0.2/0.12 у Co-op/DM) и **строка RIFLE** (длительность и разброс чуть выше, cooldown совпадает — см. §4.6.5). Остальные aim/look-ключи на этих уровнях совпадают.
 
 Значения в таблице ниже — **уровень low** (в старых редакциях вики они подавались как общие, без указания уровня):
 
@@ -406,12 +406,16 @@ mp_restartgame 1
 | Конфиг | Уровень | Значение | Интерпретация |
 | --- | --- | --- | --- |
 | CS2 (все 4 конфига идентичны) | все | [ 0.22, 0.07, 0.0, 0.45, 0.15 ] | Очередь ~0.22 с, без паузы внутри, новая очередь через 0.45 с |
-| CS:GO Co-op / Deathmatch | все уровни | [ 0.22, 0.07, 0.0, 0.45, 0.15 ] | Идентично CS2-конфигу |
+| CS:GO Co-op / Deathmatch | все уровни | [ 0.22, 0.07, 0.0, 0.45, 0.15 ] (default–normal); [ 0.225, 0.075, 0.0, 0.32, 0.12 ] (tough); [ 0.225, 0.075, 0.0, 0.25, 0.05 ] (hard); … [ 0.155, 0.035, 0.0, 0.15, 0.05 ] (elite) | Идентично CS2-конфигу в default |
 | CS:GO Guardian | default | [ 0.25, 0.55, 0.0, 0.95, 0.25 ] | Очередь ~0.25 с, очень большой разброс, cooldown 0.95 с |
 | CS:GO Guardian | low | [ 0.65, 0.55, 0.0, 0.95, 0.25 ] | Длинная очередь — «полив» на низком скилле |
-| CS:GO Guardian | fair | [ 0.55, 0.55, … ] | Первые два значения подтверждены дампами |
+| CS:GO Guardian | fair | [ 0.55, 0.55, 0.0, 0.95, 0.25 ] | — |
 | CS:GO Guardian | normal | [ 0.30, 0.55, 0.0, 0.75, 0.25 ] | — |
-| CS:GO Guardian | tough и выше | как у Co-op / Deathmatch | — |
+| CS:GO Guardian | tough | [ 0.25, 0.45, 0.0, 0.32, 0.12 ] | Cooldown как у Co-op, но длительность/разброс выше |
+| CS:GO Guardian | hard | [ 0.30, 0.2, 0.0, 0.25, 0.05 ] | — |
+| CS:GO Guardian | very_hard | [ 0.30, 0.2, 0.0, 0.2, 0.05 ] | — |
+| CS:GO Guardian | expert | [ 0.30, 0.2, 0.0, 0.15, 0.05 ] | — |
+| CS:GO Guardian | elite | [ 0.25, 0.20, 0.0, 0.15, 0.05 ] | — |
 
 > **Note**
 >
@@ -1121,7 +1125,7 @@ subtree может записывать значения в blackboard до ст
 | Уровни скилла | 9 (включая elite) | 9 (с elite) |
 | Строк в attack | 20 во всех конфигах (coop, deathmatch, guardian) | 13 во всех конфигах (armsrace, deathmatch, practice, rush — байт-идентичны) |
 | Набор режимов с деревьями | Co-op Strike, Guardian, Deathmatch | Deathmatch, Arms Race, Rush, Practice |
-| Согласованность конфигов | coop ≠ deathmatch (look_around_*), guardian — отдельный «замедленный» конфиг (default отличается только RIFLE, low…elite — почти всем; см. §4.6.4) | 4 конфига байт-идентичны (одинаковый md5); armsrace-дерево ссылается на deathmatch-конфиг |
+| Согласованность конфигов | coop ≠ deathmatch (look_around_*), guardian — отдельный «замедленный» конфиг (default — только RIFLE; low/fair/normal — почти всем; tough…elite — только reaction_time + RIFLE; см. §4.6.4) | 4 конфига байт-идентичны (совпадающий md5, проверено); armsrace-дерево ссылается на deathmatch-конфиг |
 | aim_ready_angle_tolerance | Есть во всех конфигах (3.0; в guardian по уровням 3.0/5.0/4.5/4.5/3.0…) — отсутствовал только в старой вики | Есть в конфиге |
 | TeamName / RoundNumber | Не документированы | Используются в Practice |
 | Документация узлов | Неточная, много TODO | Точный список читаемых ключей |
@@ -1691,7 +1695,7 @@ assignments = [ [ 1000 ] ]
 
 **21.2.1.** condition_is_equal и domain:
 
-condition_is_equal поддерживает незадокументированный ключ domain (string) — его нет в Source2 Wiki. Используется 40 раз в bt_parachute_1.kv3: domain = "'ParachuteN'" на каждой проверке GroupMemberId. 🔬 Судя по семантике (совпадает с decorator_try_lock), это индивидуальный лок на каждого бота. ⚠️ Назначение не подтверждено официальной документацией; не переносите domain на другие условия без проверки.
+condition_is_equal поддерживает незадокументированный ключ domain (string) — его нет в Source2 Wiki. В bt_parachute_1.kv3 ровно **41** условие condition_is_equal: одна проверка GroupId = "'Parachute'" без domain и **40** проверок GroupMemberId с domain = "'ParachuteN'" (N = 1…40). 🔬 Судя по семантике (совпадает с decorator_try_lock), это индивидуальный лок на каждого бота. ⚠️ Назначение не подтверждено официальной документацией; не переносите domain на другие условия без проверки.
 
 **21.3.** Локальные override-ы bt_memorize_enemies_vision в op11:
 
@@ -1762,7 +1766,9 @@ condition_is_equal поддерживает незадокументирован
 
 > **Note**
 >
-> bt_t_1 и bt_t_2 в раундах 6–12 отличаются только значением GroupId — функционально это одна и та же стратегия (обе ведут на long). В раунде 9 все пять групп идут через long; в раунде 12 t_3 идёт cat, t_4/t_5 — B.
+> Структура каждого bt_t_N (по дампам): condition_is_equal GroupId = "'t_N'" → decorator_run_once (max_attempts = 1) → selector из 12 ветвей condition_is_equal RoundNumber = 1…12. В раундах 1–3 перед стратегией стоит bt_wait, с раунда 4 — сразу goto.
+>
+> bt_t_1 и bt_t_2 во **всех** раундах имеют одинаковые стратегии — отличаются только значением GroupId (обе ведут на long). В раунде 9 все пять групп идут через long; в раундах 6–8 и 12 t_3 идёт cat, t_4/t_5 — B.
 
 **22.5.** CT стратегии по раундам:
 
@@ -1827,25 +1833,138 @@ condition_is_equal поддерживает незадокументирован
 
 ## 25. Инвентарь узлов и частоты
 
-Проверенные счётчики по дампам (перепроверены программно; активные, не закомментированные вхождения — кроме оговорённых):
+Все счётчики получены программным подсчётом по самим дампам (awk по строкам `type = "..."`; закомментированные строки отфильтрованы и посчитаны отдельно). Формат: **активные** (+ закомментированные) вхождения.
 
-| Узел / счётчик | CS:GO | CS2 | Где |
-| --- | --- | --- | --- |
-| decorator_run_once | ×949 | ×11 | Почти все ×949 — Guardian |
-| action_teleport | ×449 | 0 | Все — Guardian |
-| condition_inactive + action_commit_suicide | ×50 + ×50 | 0 | Все — Guardian (предохранители §19.1) |
-| action_throw_utility | ×39 | 0 | Только op11_county_2 (5 файлов); 0 в CS2-дампе — но дамп неполный (§26.3) |
-| decorator_wait_success | ×9 (в 8 файлах) | 0 | Guardian — координация (§18), op09_grunts_card7_2, bt_strat_hold_position и др. |
-| succeed_after_first = 1 | ×2 | 0 | op09_grunts_card2/bt_strat_hold_position |
-| subtree params | ×15 | 0 | op09_grunts_card2 (см. §5.1) |
-| action_jump | ×25 активных вхождений в 22 файлах (+10 закомментированных вхождений) | 0 | Почти все — jump-throw утилити (§15.12); fallback в coop/autumn/bt_rush |
-| ratio = 1 (action_pull_trigger) | ×1 | ×1 | bt_heal_if_needed (модули общие) |
-| @mp_guardian_target_site | ×47 | 0 | Guardian |
-| @mp_plant_c4_anywhere | ×14 | ×4 | CS:GO Guardian: 10 корней op11 + 4 в guardian/modules (bt_plant_bomb_if_owned/if_covered); CS2: practice/modules (bt_plant_bomb_if_covered/owned) |
-| RoundNumber | — | ×138 | Practice |
-| TeamName | — | ×4 (3× "'T'", 1× "'CT'") | Practice |
-| domain = "'AllBots'" | ×1 | 0 | op11_county_2 |
-| Закомментированные subtree в корнях op10/11 | 62 | — | После Item Strategy: parallel[FleeAreaDamageThreats, repeat LookAround] (активный — только в Co-op autumn) |
+### 25.1. Объёмы дампов
+
+| Дамп | Файлов | Узлов (активных) | Уникальных типов | Закомментированных |
+| --- | --- | --- | --- | --- |
+| BT CSGO All-in-One | 544 (coop 9, deathmatch 2, guardian 519, modules 14) | 8974 | 82 | 143 |
+| BT CS2 All-in-One | 57 (armsrace 2, deathmatch 2, modules 14, practice 37, rush 2) | 876 | 60 | 0 |
+
+### 25.2. Композиты и subtree
+
+| Узел | CS:GO | CS2 |
+| --- | --- | --- |
+| parallel | ×359 (+31 закомм.) | ×16 |
+| selector | ×477 | ×37 |
+| sequencer | ×585 | ×156 |
+| subtree | ×1420 (+62 закомм.) | ×200 |
+
+### 25.3. Декораторы
+
+| Узел | CS:GO | CS2 |
+| --- | --- | --- |
+| decorator_bot_service | ×56 | ×5 |
+| decorator_buy_service | ×51 | ×5 |
+| decorator_dec_global_counter | ×5 (все — op09_grunts_card7_2) | 0 |
+| decorator_hiding_spot_service | ×55 | ×1 |
+| decorator_maybe | ×4 | ×1 |
+| decorator_memory | ×27 | ×11 |
+| decorator_need_healing | ×1 | ×1 |
+| decorator_picker_blocked_by_smoke | ×2 | ×2 |
+| decorator_picker_dedup | ×1 | ×1 |
+| decorator_picker_grenade_type | ×2 | ×1 |
+| decorator_picker_max_score | ×12 | ×8 |
+| decorator_picker_nearby | ×12 | ×3 |
+| decorator_picker_random_by_distance | ×1 | ×1 |
+| decorator_picker_reaction_time | ×17 | ×8 |
+| decorator_picker_visible | ×16 | ×5 |
+| decorator_picker_weight_as_distance | ×1 | ×1 |
+| decorator_random_approach_point | ×1 | ×2 |
+| decorator_random_int | ×3 | ×5 |
+| decorator_ranker_dist | ×12 | ×8 |
+| decorator_remove | ×1 | ×1 |
+| decorator_remove_key | ×16 | ×4 |
+| decorator_repeat | ×153 (+31 закомм.) | ×22 |
+| decorator_run_once | ×949 | ×11 |
+| decorator_sensor | ×23 | ×16 |
+| decorator_set_reaction_time | ×15 | ×6 |
+| decorator_succeed | ×523 | ×16 |
+| decorator_tag_entity | ×6 | ×3 |
+| decorator_tag_threshold | ×5 | ×2 |
+| decorator_token_service | ×46 | ×1 |
+| decorator_try_lock | ×3 (bt_pickup_bomb_if_nearby + bt_pickup_hostage a/b) | ×3 |
+| decorator_wait_success | ×9 (в 8 файлах) | 0 |
+
+### 25.4. Условия
+
+| Узел | CS:GO | CS2 |
+| --- | --- | --- |
+| condition_distance_less | ×3 (coop bt_guard; bt_attack_with_shield ×2 — card13, county_1) | 0 |
+| condition_has_parachute | ×1 | 0 |
+| condition_inactive | ×50 | 0 |
+| condition_is_airborne | ×2 | 0 |
+| condition_is_at_bomb_site | ×2 | ×2 |
+| condition_is_empty | ×55 | ×24 |
+| condition_is_equal | ×507 | ×151 |
+| condition_is_greater_equal | ×5 | ×4 |
+| condition_is_inv_slot_empty | ×33 | ×2 |
+| condition_is_less_equal | 0 (!) | ×2 |
+| condition_is_weapon_equipped | ×1 | ×1 |
+| condition_out_of_ammo | ×1 | ×1 |
+| condition_owns_item | ×5 | ×2 |
+
+### 25.5. Действия
+
+| Узел | CS:GO | CS2 |
+| --- | --- | --- |
+| action_acquire_items | ×277 | ×18 |
+| action_aim | ×7 | ×8 |
+| action_aim_projectile | ×1 (coop bt_throw_utility_if_covered) | 0 |
+| action_assign_guardian_loadout | ×35 | 0 |
+| action_attack | ×3 | ×3 |
+| action_buy | ×16 | ×4 |
+| action_choose_bomb_site_area | ×49 | ×5 |
+| action_choose_guardian_bomb_plant_location | ×12 (10 корней op11 + bt_plant_bomb_if_owned/if_covered) | ×2 (practice/modules/bt_plant_bomb_if_*) |
+| action_choose_random_waypoint | ×51 | ×6 |
+| action_choose_random_waypoint_within_radius | ×2 (coop bt_roam, bt_rush) | 0 |
+| action_choose_team_spawn_area | ×1 | ×3 |
+| action_combat_positioning | ×1 | ×1 |
+| action_commit_suicide | ×50 | 0 |
+| action_compare_global_counter | ×9 | 0 |
+| action_coordinated_buy | ×1 (op09_grunts_card7_2) | 0 |
+| action_crouch | ×2 (bt_strat_hold_position, bt_boost_molly) | 0 |
+| action_entity_accept_input | ×6 (op11_county_2) | 0 |
+| action_equip_item | ×7 | ×3 |
+| action_equip_weapon | ×324 | ×7 |
+| action_flee_area_damage | ×1 | ×1 |
+| action_jump | ×25 в 22 файлах (+10 закомм.) | 0 |
+| action_look_at | ×309 | ×4 |
+| action_move_to | ×557 | ×39 |
+| action_parachute_positioning | ×1 | 0 |
+| action_pull_trigger | ×289 | ×3 |
+| action_say | ×2 (только coop: bt_guard, bt_roam) | 0 |
+| action_select_areas_within_radius | ×2 (op11_insertion2_a/b) | 0 |
+| action_set_global_counter | ×12 | 0 |
+| action_set_global_flag | ×1 | ×1 |
+| action_set_value_float | ×13 (все — coop bt_determine_rush_center) | 0 |
+| action_set_value_vector | ×13 (все — coop bt_determine_rush_center) | 0 |
+| action_teleport | ×449 | 0 |
+| action_throw_utility | ×39 (только op11_county_2: firebomb 7, firebomb_wide 18, smoke_ring 8, smoke_house_rush 3, smoke_houses 3) | 0 |
+| action_use | ×3 | ×3 |
+| action_wait | ×870 (+8 закомм.) | ×13 |
+
+> **Note**
+>
+> condition_is_less_equal — единственный из «неравенств», встречающийся **только в CS2** (practice), а condition_is_greater/is_less не встречаются нигде (§26.2). Глобальные счётчики (action_set_global_counter, action_compare_global_counter, decorator_dec_global_counter) в CS2-дампе отсутствуют полностью — механика подтверждена только CS:GO Guardian.
+
+### 25.6. Особые счётчики
+
+| Счётчик | CS:GO | CS2 |
+| --- | --- | --- |
+| succeed_after_first = 1 | ×2 (op09_grunts_card2/bt_strat_hold_position) | 0 |
+| subtree params | ×15 (bt_strat_heaven 3, bt_strat_lobby 6, bt_strat_outside 6) | 0 |
+| ratio = 1 (action_pull_trigger) | ×1 (bt_heal_if_needed) | ×1 (bt_heal_if_needed) |
+| acquire_only (action_aim) | ×6 | ×7 |
+| amount | ×5 (все — decorator_tag_threshold amount = 2) | ×2 |
+| @mp_guardian_target_site | ×47 | 0 |
+| @mp_plant_c4_anywhere | ×14 (10 корней op11 + 4 в guardian/modules) | ×4 (practice/modules) |
+| RoundNumber | — | ×138 (practice) |
+| TeamName | — | ×4 (3× "'T'", 1× "'CT'") |
+| domain = "'AllBots'" | ×1 (op11_county_2) | 0 |
+| Закомментированные subtree в корнях op10/11 | 62 | — |
+| append_items (decorator_sensor) | 0 | ×2 (armsrace + deathmatch bt_default) |
 
 ## 26. Мёртвые ключи и неиспользуемые узлы
 
@@ -1860,7 +1979,7 @@ condition_is_equal поддерживает незадокументирован
 | attacker_filter | decorator_sensor | Не встречается |
 | wait_modulo_tick_mod/add | action_wait | Не встречаются |
 | team | action_choose_team_spawn_area | Не встречается |
-| amount | decorator_repeat | Не встречается ни разу (все 7 вхождений amount — это decorator_tag_threshold amount = 2) |
+| amount | decorator_repeat | Не встречается ни разу — все 5 вхождений amount в дампах это decorator_tag_threshold amount = 2 (ровно по числу этих узлов) |
 | BT_ACTION_MOVETO_SAFEST_ROUTE | action_move_to route_type | 0 использований — только FASTEST |
 
 ### 26.2. Узлы, не встречающиеся ни разу (0 в 544 + 57 файлах)
@@ -1890,9 +2009,16 @@ Source2 Wiki помечает ~36 узлов как «существуют, но
 | decorator_wait_success | Guardian (координация, §18; ×9 в 8 файлах) |
 | condition_inactive + action_commit_suicide | Guardian (предохранители, ×50) |
 | action_teleport | Guardian (×449) |
-| action_set_value_vector / action_set_value_float | Co-op bt_determine_rush_center и др. |
+| action_set_value_vector / action_set_value_float | Co-op bt_determine_rush_center (×13 + ×13, все — только этот модуль) |
 | action_entity_accept_input | op11_county_2 (×6) |
-| action_assign_guardian_loadout / action_choose_guardian_bomb_plant_location / action_select_areas_within_radius | Guardian (лодауты по волнам, закладка, зоны) |
+| action_assign_guardian_loadout | Guardian (×35, лодауты по волнам) |
+| action_choose_guardian_bomb_plant_location | Guardian ×12 (10 корней op11 + модули bt_plant_bomb_if_owned/if_covered) **и CS2 Practice ×2** (practice/modules/bt_plant_bomb_if_covered, bt_plant_bomb_if_owned) — «unused» неверно даже для CS2-деревьев |
+| action_select_areas_within_radius | op11_insertion2_a/b (×2) |
+| action_say | Co-op autumn (bt_guard, bt_roam; ×2) |
+| condition_distance_less | Co-op bt_guard + bt_attack_with_shield (card13, county_1; ×3) |
+| action_crouch | bt_strat_hold_position (card2) + bt_boost_molly (op10_engage_b); ×2 |
+| action_choose_random_waypoint_within_radius | Co-op bt_roam, bt_rush; ×2 |
+| глобальные счётчики (action_set_global_counter / action_compare_global_counter / decorator_dec_global_counter) | CS:GO Guardian: card7_2 (dec ×5, set ×12, compare ×9); в CS2-дампе — 0 |
 
 ## 27. Анти-паттерны
 
@@ -1921,73 +2047,3 @@ Source2 Wiki помечает ~36 узлов как «существуют, но
 | Мёртвый ShouldBuy | В Arms Race и newplayer_dust2_01 пишется, но не читается | Покупка через item_strategy (run_once → action_buy), как у Valve; либо живая buy-ветка как в deathmatch/rush/practice/bt_default |
 | condition_is_weapon_suitable работает как condition_is_weapon_equipped | ⚠️ Не подтверждено: по старой VDC — баг движка, но сам источник ставит пометку [confirm] | Не использовать для проверки «подходит ли оружие по дистанции» без самостоятельной проверки в игре |
 | // type = "action_RIGHT_CLICK?" | В op10_ancient_a/bt_long_awp Valve хотела ПКМ-действие (зум AWP), но закомментировала | Тривия; используйте action_equip_weapon для скоупа |
-
-## 29. Чтение дампов, структура файлов и история
-
-### 29.1. Структура CS:GO (544 файла)
-
-```
-scripts/ai/
-├── guardian/        — 519 файлов:
-│     51 корень: bt_op09_grunts_card*.txt (включая bt_grunts_card13.txt — БЕЗ префикса op09),
-│                bt_op10_*.txt (17), bt_op11_*.txt (17)
-│     + bt_config.txt
-│     + modules/     — общие модули + per-map папки op09_grunts_card*/, op10_*/, op11_*/
-├── coop/            — 9 файлов: bt_config + bt_default, bt_guard, bt_roam, bt_rush, bt_sniper
-│                      + autumn/ (bt_basic_player_* и др.)
-├── modules/         — 14 общих модулей (bt_attack, bt_memorize_*, bt_heal_if_needed, …)
-└── deathmatch/      — 2 файла: bt_config + bt_default
-```
-
-### 29.2. Структура CS2 (57 файлов)
-
-```
-scripts/ai/
-├── armsrace/        — 2: bt_config + bt_default (дерево ссылается на deathmatch/bt_config!)
-├── deathmatch/      — 2: bt_config + bt_default
-├── modules/         — 14 общих модулей
-├── practice/        — 37: bt_config, bt_default (второе дерево! см. §14.4.2),
-│                      newplayer_dust2_01 + modules/ (10 общих)
-│                      + modules/newplayer_dust2_01/ (24)
-└── rush/            — 2: bt_config + bt_default
-```
-
-### 29.3. Корневые деревья и модули
-
-- **Корневое дерево** — файл с config + root; назначается через mp_bot_ai_bt (или behavior_tree_file на info_enemy_terrorist_spawn в Co-op Strike).
-- **Subtree-модуль** — файл с одним узлом верхнего уровня, без config и root; подключается через type = "subtree" file = "...".
-- Модули Guardian частично дублируют общие modules/ с правками под карту (например, guardian/modules/bt_plant_bomb_if_owned с проверкой @mp_plant_c4_anywhere).
-
-### 29.4. Формат All-in-One-дампов
-
-- Файлы склеены разделителями вида `===== scripts\ai\... =====` — по ним определяется, какому игровому файлу принадлежит содержимое.
-- В дампах имена .txt; в игре те же файлы — .kv3.
-- Внутри — обычный KV3; строки заканчиваются \r\n (учитывайте при grep-паттернах с `$`).
-- Пути внутри дампов используют обратные слэши (scripts\ai\...), в игре и в config = — прямые (scripts/ai/...).
-
-### 29.5. Закомментированные узлы
-
-- Строки, начинающиеся с //, — не активные узлы. В корнях op10/op11 — 62 закомментированных subtree.
-- При подсчёте узлов отфильтровывайте комментарии (например, `grep -v "^\s*//"`), иначе счётчики завышаются (пример: action_jump — 35 строк всего, из них 10 закомментированных и 25 активных).
-- Счётчики §25 — активные вхождения, если не указано иное.
-
-### 29.6. Извлечение из VPK
-
-- pak01_dir.vpk → Source2 Viewer → csgo/scripts/ai/.
-- С 01.09.2020 деревья Co-op Strike упаковываются также в BSP-архивы карт (behavior_tree_file на спавн-энтити).
-
-### 29.7. Источники и даты проверки
-
-| Источник | Что даёт |
-| --- | --- |
-| Source2 Wiki (CS2) — Bot Behavior Trees | Формат, узлы, читаемые ключи, модель выполнения, «unused»-пометки |
-| Valve Developer Community (старые CS:GO-страницы; сведение от 13.10.2026) | CS:GO-специфика, баги, обходные пути, пометки [confirm] |
-| BT CSGO All-in-One (544 файла) | Реальные узлы, параметры, значения, частоты |
-| BT CS2 All-in-One (57 файлов) | То же для CS2 (неполный: без Guardian/Co-op) |
-| Перекрёстный аудит (Deepseek, Grok, Qwen, Mistral, zAI, GPT) | Независимая сверка claims ↔ дампы ↔ документация; счётчики §25 перепроверены программно |
-
-### 29.8. Известная неполнота и как с ней работать
-
-- CS2-дамп не содержит Guardian/Co-op-контента: все «продвинутые» узлы (throw_utility, парашют, телепорты, глобальные счётчики, токен-сервисы стратегий) подтверждены **только CS:GO-дампами**.
-- Не делайте из «0 в CS2-дампе» вывод, что узла нет в CS2. И наоборот: «unused» в Source2 Wiki — это «не в CS2-официальных деревьях», а не «узла нет».
-- Часть утверждений вики — выводы из дампов (🔬), а не документация: генерация GroupMemberId = <token><N> (§20.5), формула score у ranker_dist (§6.3), выбор первой сущности max_score без ранкера (§6.3), семантика domain у condition_is_equal (§21.2.1), алгоритм перебора assignments (§6.8.3). Не выдавайте их за официальные — помечены.
