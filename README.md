@@ -64,7 +64,7 @@
 
 ## 1. Что такое Behavior Tree
 
-**1.1.** Behavior Tree (BT) — KV3-файл, описывающий поведение бота как дерево узлов. Игра обходит дерево каждый тик: проверяет условия, выполняет действия. Бот не «думает» — он следует дереву.
+**1.1.** Behavior Tree (BT) — KV3-файл, описывающий поведение бота как дерево узлов. Игра обходит дерево каждый тик: проверяет условия, выполняет действия. Бот не «думает» — он следует дереву. Если `mp_bot_ai_bt` пуст — боты используют **классический встроенный ИИ** (hardcoded classic bot AI), без дерева.
 
 **1.2.** Где лежат файлы:
 
@@ -126,6 +126,17 @@ mp_restartgame 1
 > ⚠️ У Practice отдельный конфиг `scripts/ai/practice/bt_config.kv3` — в CS2 он байт-идентичен остальным трём CS2-конфигам.
 >
 > ⚠️ CS:GO-конфиги **не идентичны между собой**: coop и deathmatch различаются только `look_around_*` (для `low`: `0.65/0.1/0.5` против `0.9/0.4/0.6`), а guardian — это отдельный «замедленный» конфиг, отличающийся почти всем (см. §4.6.4), а не только строкой RIFLE.
+
+**1.6.1.** Официальные режимы выставляют `mp_bot_ai_bt` в своих конфигах режимов:
+
+| Конфиг | Дерево |
+|---|---|
+| `gamemode_deathmatch.cfg`, `gamemode_dm_freeforall.cfg` | `scripts/ai/deathmatch/bt_default.kv3` |
+| `gamemode_armsrace.cfg` | `scripts/ai/armsrace/bt_default.kv3` |
+| `gamemode_rush.cfg` | `scripts/ai/rush/bt_default.kv3` |
+| `gamemode_new_user_training.cfg` | `scripts/ai/practice/newplayer_dust2_01.kv3` |
+
+Выставить `mp_bot_ai_bt` можно из cfg-файла **или из cs_script** через `Instance.ServerCommand`.
 
 ---
 
@@ -213,7 +224,7 @@ mp_restartgame 1
 
 | Элемент | Пример | Примечание |
 |---|---|---|
-| Комментарии | `// текст` | Однострочные |
+| Комментарии | `// текст` | Однострочные; поддерживаются и многострочные `/* ... */` (по VDC) |
 | Ключи | `type`, `input`, `destination` | Регистронезависимы: `Name = name` встречается |
 | Строки | `"scripts/ai/..."` | В файлах Valve часто `domain = "'PressAntennaButton'"` — двойная строка с одинарными кавычками внутри |
 | Числа | `3`, `0.5` | — |
@@ -223,6 +234,10 @@ mp_restartgame 1
 > **Warning**
 >
 > Не «исправляйте» `domain = "'PressAntennaButton'"` на `domain = "PressAntennaButton"` без проверки. В предоставленных файлах для `decorator_try_lock`, `decorator_token_service`, `decorator_run_once`, `action_set_global_counter` и т.п. используются именно строки с внутренними одинарными кавычками. При этом `decorator_hiding_spot_service domain = "AllBots"` и `memory_to_expire { domain = "AllBots" }` — **без** внутренних кавычек. Единственное исключение из правила — `decorator_run_once domain = "'AllBots'"` (**с** кавычками!) в `op11_county_2`, волна 1, перед `action_entity_accept_input` для дверей: так только **один** бот нажимает все кнопки дверей Creek, а не все пять одновременно.
+
+> **Warning**
+>
+> ⚠️ Движок **молча игнорирует** любые параметры, не принадлежащие узлу, — без ошибок и предупреждений. Реально читаются только специфичные для данного `type` ключи. Из-за этого «правдоподобные» имена (`source` / `input` / `input_location` — действителен только один из них) и опечатки почти неуловимы при тестировании — сверяйте ключи с таблицами §6–8. (Подтверждено VDC.)
 
 **3.5.** Пример subtree-файла:
 
@@ -235,6 +250,23 @@ mp_restartgame 1
     child = { ... }
 }
 ```
+
+**3.6.** Сводная таблица значений enum (по Source2 Wiki):
+
+| Ключ | Значения |
+|---|---|
+| `entity_type_filter` | ALL, PLAYERS, HUMAN_PLAYERS, NOISE, DAMAGE, AREA_DAMAGE, CLASSNAME, GRENADE |
+| `team_filter`, `attacker_filter` | ANY, CT, TERRORIST, SAME, OPPOSITE, ENEMY |
+| `team` | ANY, CT, TERRORIST, OPPOSITE |
+| `team_restriction` | ANY, CT, T |
+| `shape` type | sensor_shape_fov, sensor_shape_sphere (с `radius`) |
+| `movement_type` | BT_ACTION_MOVETO_WALK, BT_ACTION_MOVETO_RUN |
+| `route_type` | BT_ACTION_MOVETO_FASTEST_ROUTE, BT_ACTION_MOVETO_SAFEST_ROUTE |
+| `slot` | RIFLE, PISTOL, KNIFE, GRENADES, C4 |
+| `types` (гранаты) | FLASH, FIRE, EXPLOSIVE, DECOY, SMOKE (+ SENSOR, SNOWBALL по старой CS:GO-вике) |
+| `operation_type` | BT_DECORATOR_TAG_ENTITY_SET, BT_DECORATOR_TAG_ENTITY_CLEAR |
+| `check_type` | BT_DECORATOR_TAG_THRESHOLD_AT_LEAST, BT_DECORATOR_TAG_THRESHOLD_AT_MOST |
+| `weapon` | BEST или classname (например, `weapon_knife`) |
 
 ---
 
@@ -463,7 +495,7 @@ params =
 | `decorator_picker_reaction_time` | — | Задерживает выход на `reaction_time` бота | ✅ |
 | `decorator_picker_dedup` | `against` (string), `distance_threshold` (float) | Убирает дубликаты — сущности ближе `distance_threshold` к сущностям из `against` | ✅ |
 | `decorator_picker_random_by_distance` | `distance_min` (float), `distance_max` (float) | **Вероятностный** фильтр по дистанции: сущности ближе к `distance_min` удаляются реже, ближе к `distance_max` — чаще. Не жёсткий порог. Важно для `bt_memorize_noises` | ✅ |
-| `decorator_picker_weight_as_distance` | — | Убирает сущности, чья дистанция больше их «веса» | ✅ |
+| `decorator_picker_weight_as_distance` | — | Убирает сущности, чья дистанция больше их «веса» (weight — внутренняя метрика слышимости). По VDC использовать **только** при сенсинге `NOISE` | ✅ |
 | `decorator_picker_grenade_type` | `types[]` (FLASH, FIRE, EXPLOSIVE, DECOY, SMOKE; по старой CS:GO-вике дополнительно SENSOR и SNOWBALL) | Фильтр гранат по типу | ✅ |
 | `decorator_picker_blocked_by_smoke` | `distance_threshold` (float) | Оставляет только сущности за дымом | ⚠️ `distance_threshold` в файлах есть, но по вики игнорируется |
 | `decorator_picker_max_score` | — | Берёт сущность с **максимальным score**. Если перед ним `decorator_ranker_dist` — score обратно пропорционален дистанции, т.е. берётся ближайшая. **Без ранкера** score у всех одинаковый (0/1), и берётся **первая** сущность массива (порядок появления на сервере) — не «случайная» и не «лучшая». Частая ошибка новичков | ✅ |
@@ -499,10 +531,10 @@ params =
 
 | Узел | Ключи | Что делает | Статус |
 |---|---|---|---|
-| `decorator_repeat` | `amount` (int), `child` | Перезапускает ребёнка каждый раз, когда он завершается. Без `amount` — вечно. С `amount = N` — N раз | ✅ `amount` ⚠️ не встречается ни разу (все 7 вхождений `amount` в дампах — это `decorator_tag_threshold amount = 2`) |
+| `decorator_repeat` | `amount` (int), `child` | Перезапускает ребёнка каждый раз, когда он завершается. Без `amount` — вечно. С `amount = N` — N раз, затем возвращает результат последнего запуска. ⚠️ По VDC останавливается, если ребёнок вернул failure | ✅ `amount` ⚠️ не встречается ни разу (все 7 вхождений `amount` в дампах — это `decorator_tag_threshold amount = 2`) |
 | `decorator_maybe` | `chance` (float, 0–1), `child` | Выполняет ребёнка с вероятностью `chance` | ✅ |
 | `decorator_succeed` | `negated` (bool), `child` | Без `negated`: всегда проходит check-pass, после ребёнка возвращает success. С `negated = 1`: всегда проходит check-pass, после ребёнка возвращает failure | ✅ |
-| `decorator_invert` | `child` | Инвертирует check-результат. В CS2 вместо него используют `negated = 1` | ⚠️ не встречен |
+| `decorator_invert` | `child` | Инвертирует **только check-результат** (running-результаты ребёнка проходят насквозь без изменений). В CS2 вместо него обычно используют `negated = 1`. ⚠️ По VDC — единственный способ инверсии для **action-узлов**, которые не поддерживают `negated` (обходной путь) | ⚠️ не встречен |
 | `decorator_run_once` | `domain` (string), `max_attempts` (int), `child` | Ограничивает запуск. Без `domain` — каждый бот один раз. С `domain` — только один бот на сервере | ✅ |
 | `decorator_try_lock` | `domain` (string), `child` | Блокирует домен на время выполнения ребёнка. Только один бот одновременно | ✅ |
 | `decorator_wait_success` | `timeout` (float), `child` | Ждёт success от ребёнка или timeout | ✅ |
@@ -599,7 +631,7 @@ team_restriction = [ "T", "T", "T", "T", "T", "CT", "CT", "CT", "CT", "CT" ]
 |---|---|---|---|
 | `decorator_find_utility_strat` | `distance_threshold` (float), `input_location`, `output_location`, `output_angles`, `output_weapon`, `utilities` (`{x, y, z, ang_pitch, ang_yaw, ang_roll, weapon}[]`), `child` | Предположительно ищет позицию для утилиты. Не используется | ⚠️ не встречен |
 | `decorator_route_service` | `config` (`{routes: waypoint[][], strategies: int[][]}`), `output_waypoint`, `output_waypoint_name`, `output_domain`, `child` | Предположительно управляет маршрутами. Не используется | ⚠️ не встречен |
-| `decorator_set_barrier` | ключи не документированы | Не используется | ⚠️ не встречен |
+| `decorator_set_barrier` | `input_domain` (string), `input_name` (string), `input_location` (position) — по VDC | Предположительно ставит «барьер» (запретную зону) для pathfinding. Не используется | ⚠️ не встречен |
 | `decorator_game_event` | — | Узел из старой CS:GO-вики (с пометкой самого сообщества «не существует в коде?»). В дампах отсутствует; приведён для полноты | ⚠️ существование под вопросом |
 
 ---
@@ -626,8 +658,8 @@ team_restriction = [ "T", "T", "T", "T", "T", "CT", "CT", "CT", "CT", "CT" ]
 | `condition_inactive` | `input` (`{key}[]`), `round_start_threshold_seconds` (float), `sensor_inactivity_threshold_seconds` (float), `negated`, `child` | Нет активности в указанных ключах заданное время и с начала раунда прошло не меньше порога | ✅ |
 | `condition_is_airborne` | `negated`, `child` | Бот в воздухе | ✅ |
 | `condition_is_reloading` | `negated`, `child` | Оружие перезаряжается | ⚠️ не встречен |
-| `condition_is_weapon_suitable` | `input`, `weapon`, `negated`, `child` | Подходит ли оружие для дистанции до `input`. ⚠️ По Valve Developer Community работает (с багом) как `condition_is_weapon_equipped` | ⚠️ не встречен |
-| `condition_barrier` | `input_domain`, `input_name`, `radius`, `negated`, `child` | — | ⚠️ не встречен |
+| `condition_is_weapon_suitable` | `input`, `weapon`, `negated`, `child` | Подходит ли оружие для дистанции до `input`. Задумано так: снайперки «не подходят» ближе **160 юнитов**, дробовики — дальше **600 юнитов** (VDC). ⚠️ По VDC фактически работает (с багом) как `condition_is_weapon_equipped` | ⚠️ не встречен |
+| `condition_barrier` | `input_domain`, `input_name`, `radius` (по Source2 Wiki) / `input_location` (по VDC), `negated`, `child` | Источники расходятся в наборе ключей | ⚠️ не встречен |
 
 > **Note**
 >
@@ -664,7 +696,7 @@ negated = 1
 | `action_crouch` | — | Присесть | ✅ (`op09_grunts_card2`, `op10_engage_b/bt_boost_molly`) |
 | `action_teleport` | `destination` (position) | Телепорт. ⚠️ Не сбрасывает `auto_look_adjust` и не влияет на камеру — для точных углов после телепорта ставьте явный `action_look_at` | ✅ |
 | `action_parachute_positioning` | — | Движение по диагонали для парашюта; периодически меняет направление (каждые несколько секунд) | ✅ (только CS:GO Guardian, Blacksite) |
-| `action_hide` | `output` (string), `max_range` (float) | Случайное укрытие. **Не встречен.** Используйте `decorator_hiding_spot_service` + `action_move_to hiding_spot` | ⚠️ не встречен |
+| `action_hide` | `output` (string), `max_range` (float) | Случайное укрытие. **Не встречен.** ⚠️ По VDC не проверяет, занято ли укрытие. Используйте `decorator_hiding_spot_service` + `action_move_to hiding_spot` | ⚠️ не встречен |
 | `action_standup` | — | Встать | ⚠️ не встречен |
 
 **8.2.1.** `hiding_spot` и `threat` у `action_move_to` — влияние на pathfinding:
@@ -681,6 +713,8 @@ negated = 1
 > `damaging_areas_penalty_cost`, `additional_arrival_epsilon_2d`, `hiding_spot_check_distance_threshold` встречаются только в CS:GO-дампах (Guardian); в CS2-дампе файлов с ними нет (примеры: `op10_ancient_a/bt_cover_smoke`, `op09_grunts_card7_2/bt_a_setup_smoke_only_1`, `op09_grunts_card6_2/bt_takeover_strategy` — все это CS:GO Guardian).
 >
 > ⚠️ Баг: после `action_jump` тип движения сбрасывается на `RUN`, даже если был `WALK` (подтверждено Valve Developer Community).
+>
+> ⚠️ Баг: при включённом столкновении с тиммейтами бот **не перестраивает маршрут** вокруг товарища, перегородившего путь, а продолжает «проталкиваться» сквозь него, пока тот не уйдёт с дороги (подтверждено VDC).
 
 ### 8.3. Прицеливание и стрельба
 
@@ -749,12 +783,15 @@ purchases =
 | `save_threshold` | Если у бота меньше денег — пропускает покупку |
 | `team_filter` | `SAME` / `ENEMY` / `ANY` |
 
-**8.6.2.** Известных бага два (оба подтверждены Valve Developer Community):
+Узел возвращает **failure** и пропускается, если ботов, подходящих под `team_filter`, не хватает на все записи `purchases` — покупка целиком не выполняется (по VDC).
+
+**8.6.2.** Известных бага **три** (все подтверждены Valve Developer Community):
 
 1. Один бот может заставить покупать **всех**.
 2. **Наследование предметов**: боты, стоящие ниже в массиве `purchases`, наследуют предметы от ботов выше — внутренний буфер покупок не очищается между итерациями по ботам.
+3. Боты, **не** подходящие под `team_filter`, всё равно ошибочно получают `id_no_purchase`.
 
-Решение для обоих: использовать узел строго внутри `decorator_run_once` с уникальным `domain` (например, `"'CoordinatedBuy'"`), чтобы его выполнял только один бот-инициатор, а остальные ждали через `decorator_wait_success` + `action_compare_global_counter` (см. §18).
+Решение для всех трёх: использовать узел строго внутри `decorator_run_once` с уникальным `domain` (например, `"'CoordinatedBuy'"`), чтобы его выполнял только один бот-инициатор, а остальные ждали через `decorator_wait_success` + `action_compare_global_counter` (см. §18).
 
 ### 8.7. Стратегии и координация
 
@@ -766,7 +803,7 @@ purchases =
 | `action_choose_random_waypoint_within_radius` | `origin` (position), `radius` (number), `output` (string) | Случайная точка в радиусе. `radius` может быть числом, строкой-литералом или ключом blackboard | ✅ |
 | `action_choose_guardian_bomb_plant_location` | `output` (string) | Выбирает позицию закладки бомбы Guardian. Работает, только если `@mp_plant_c4_anywhere = 1` (18 использований: 14+4). Пишет нав-тайл (позицию), совместимый с `action_move_to` | ✅ |
 | `action_select_areas_within_radius` | `input` (position), `radius` (number), `output` (string) | Выбирает нав-зоны в радиусе. `radius` — число, строка или ключ | ✅ |
-| `action_assign_guardian_loadout` | `input_token_name` (string), `assignments` (`{token, loadout[]}[]`) | Раздаёт лодауты Guardian по токенам и волнам (`wave_numbers` / `wave_number_min` / `weight`) | ✅ |
+| `action_assign_guardian_loadout` | `input_token_name` (string), `assignments` (`{token, loadout[]}[]`) | Раздаёт лодауты Guardian по токенам и волнам (`wave_numbers` / `wave_number_min` / `wave_number_max` / `weight`) | ✅ |
 
 **8.7.1.** `action_assign_guardian_loadout` — структура `loadout`:
 
@@ -785,7 +822,7 @@ purchases =
 |---|---|
 | `items` | Массив classname |
 | `wave_numbers` | Массив номеров волн, в которых доступен этот loadout |
-| `wave_number_min` | Альтернатива `wave_numbers` — «начиная с этой волны» |
+| `wave_number_min` / `wave_number_max` | Альтернатива `wave_numbers` — диапазон волн: «начиная с этой» / «…по эту» |
 | `weight` | Вес при случайном выборе среди подходящих |
 
 Пример — `op10_apollo` («пистолетные раунды»): все лодауты — пистолеты, раздаваемые по волнам: usp/hkp2000 → elite/tec9/fiveseven/cz75a → revolver/deagle (волны 1–4).
@@ -796,7 +833,7 @@ purchases =
 |---|---|---|---|
 | `action_wait` | `wait_time_min` (number), `wait_time_max` (number), `wait_modulo_tick_mod` (number), `wait_modulo_tick_add` (number) | Замораживает ИИ на случайное время | ✅ кроме `modulo` ⚠️ |
 | `action_use` | — | Нажимает `+use`: использовать, разминировать, подобрать | ✅ |
-| `action_say` | `phrase` (string), `high_priority` (bool) | Радио-команда | ✅ |
+| `action_say` | `phrase` (string), `high_priority` (bool) | Радио-команда. Список фраз — в `botchatter.db` | ✅ |
 | `action_commit_suicide` | — | Убивает бота | ✅ |
 | `action_entity_accept_input` | `name` (string), `input` (string) | Отправляет input энтити по targetname | ✅ |
 | `action_set_global_flag` | `name` (string), `expiration_time_min` (float), `expiration_time_max` (float) | Ставит глобальный флаг на случайное время | ✅ |
@@ -830,7 +867,7 @@ Modulo-параметры (`wait_modulo_tick_mod/add`) в дампах **не в
 
 ## 9. Модель выполнения
 
-**9.1.** Каждый тик дерево обходится дважды:
+**9.1.** Дерево оценивается каждый тик — примерно **64 раза в секунду**, и каждый узел помнит, на чём остановился. Каждый тик дерево обходится дважды:
 
 | Проход | Что делает |
 |---|---|
@@ -1039,12 +1076,13 @@ decorator_bot_service в корне → истекает память: {key, tim
 
 | Команда | Назначение | Требования |
 |---|---|---|
-| `mp_bot_ai_bt "путь"` | Назначить дерево всем ботам | — |
+| `mp_bot_ai_bt "путь"` | Назначить дерево **всем** ботам на сервере (обеим командам — и T, и CT) | — |
 | `mp_bot_ai_bt_clear_cache` | Сбросить кэш после правок | — |
 | `cv_bot_ai_bt_debug_target <index>` | Нарисовать дерево бота | `sv_cheats 1`, локальный/приватный сервер |
 | `cv_bot_ai_bt_hiding_spot_show` | Показать укрытия | `sv_cheats 1` |
 | `cv_bot_ai_bt_moveto_show_next_hiding_spot` | Показать следующее проверяемое укрытие | `sv_cheats 1` |
 | `developer 1` | Писать `[AI BT]: Loaded behavior tree '<file>'` при спавне | — |
+| `Instance.ServerCommand` (cs_script) | Выставить `mp_bot_ai_bt` скриптом карты (альтернатива cfg) | — |
 
 > **Warning**
 >
@@ -1397,6 +1435,7 @@ sequencer[
 | Ожидать `BT_ACTION_MOVETO_SAFEST_ROUTE` | Используется только `BT_ACTION_MOVETO_FASTEST_ROUTE`; движение — RUN/WALK |
 | `action_jump` при `movement_type = WALK` | Баг: после прыжка тип движения сбрасывается на RUN — переустанавливайте WALK после |
 | Считать, что `decorator_buy_service` всегда влияет на поведение | В Arms Race **и Practice** `ShouldBuy` пишется, но никогда не читается (см. §16.5); покупка там идёт через `item_strategy` |
+| Надеяться, что опечатка в параметре вызовет ошибку | Движок **молча игнорирует** чужие для узла параметры, без предупреждений (см. Warning в §3.4) — сверяйте имена ключей с §6–8 |
 | Копировать закомментированные блоки из op10/11-корней | В корнях 62 закомментированных subtree (в т.ч. parallel[FleeAreaDamageThreats, LookAround] после Item Strategy — активный только в Co-op autumn); проверяйте, что копируете |
 
 ### 16.5. Мёртвый `ShouldBuy` в Arms Race и Practice
@@ -1860,74 +1899,8 @@ Source2 Wiki помечает ~36 узлов как «существуют, но
 | `action_coordinated_buy` — баг 2 (наследование предметов) | Внутренний буфер покупок не очищается между ботами: боты ниже по массиву наследуют предметы от ботов выше | Тот же `run_once`-паттерн + `wait_success` для остальных |
 | `decorator_sensor` с `team_filter = "ENEMY"` для гранат | Возвращает гранаты T-команды независимо от команды бота | `OPPOSITE` вместо `ENEMY` (подтверждено VDC) |
 | `action_jump` сбрасывает `movement_type` | WALK превращается в RUN после прыжка | Переустанавливать `movement_type = "BT_ACTION_MOVETO_WALK"` после `action_jump` |
+| `action_move_to` не обходит тиммейтов | При включённой коллизии бот не перестраивает маршрут вокруг товарища, а «проталкивается» сквозь него, пока тот не уйдёт (VDC) | Не строить точные «узкие» маршруты впритык друг к другу |
+| `action_coordinated_buy` — баг 3 | Боты, **не** подходящие под `team_filter`, всё равно ошибочно получают `id_no_purchase` (VDC) | Не использовать `id_no_purchase` как фильтр по команде |
 | Мёртвый `ShouldBuy` | В Arms Race и Practice пишется, но не читается | Покупка через `item_strategy` (`run_once → action_buy`), как у Valve |
 | `condition_is_weapon_suitable` работает как `condition_is_weapon_equipped` | По VDC — баг движка | Не использовать для проверки «подходит ли оружие по дистанции» |
 | `// type = "action_RIGHT_CLICK?"` | В `op10_ancient_a/bt_long_awp` Valve хотела ПКМ-действие (зум AWP), но закомментировала | Тривия; используйте `action_equip_weapon` для скоупа |
-
-## 29. Чтение дампов, структура файлов и история
-
-### 29.1. Как читать All-in-One дамп
-
-| Что | Значение |
-|---|---|
-| `.txt` вместо `.kv3` | Дампы извлечены с переименованием; в игре файлы — `.kv3`. Внутри — KV3-разметка |
-| `===== scripts\ai\...` | Разделитель между файлами в «склеенном» All-in-One: путь к следующему файлу |
-| Поиск по дампу | Ищите `type = "..."` с учётом разделителей; помните, что вхождения одного узла могут лежать в разных файлах с одинаковым именем в разных папках (`modules/`, `guardian/modules/...`) |
-
-### 29.2. Дерево папок `scripts/ai/`
-
-```
-scripts/ai/
-├── armsrace/                      (CS2)
-│   ├── bt_default.kv3
-│   └── bt_config.kv3
-├── deathmatch/                     (CS2 + CS:GO)
-│   ├── bt_default.kv3
-│   └── bt_config.kv3
-├── rush/                           (CS2)
-│   ├── bt_default.kv3
-│   └── bt_config.kv3
-├── practice/                       (CS2)
-│   ├── newplayer_dust2_01.kv3
-│   ├── bt_config.kv3
-│   └── modules/ (bt_t_1..5, bt_ct_1..5, bt_goto_*, bt_acquire_*_weapons, …)
-├── modules/                        (общие, 14 шт.; байт-идентичны между играми)
-│   └── bt_attack, bt_memorize_*, bt_plant_bomb_*, bt_defuse_*, bt_pickup_*, …
-├── coop/                           (CS:GO)
-│   ├── bt_config.kv3
-│   ├── bt_guard / bt_roam / bt_rush / bt_sniper .kv3
-│   └── autumn/ (+ autumn/modules/)
-└── guardian/                       (CS:GO, 519 файлов)
-    ├── bt_config.kv3
-    ├── bt_op09_grunts_card*.kv3
-    ├── bt_op10_<map>_a/b.kv3
-    ├── bt_op11_<map>_*.kv3
-    └── modules/
-        ├── op09_grunts_card2/ (bt_strat_*, bt_strat_hold_position)
-        ├── op09_grunts_card7_2/ (bt_coordinated_buy)
-        ├── op10_<map>_a/ (bt_cover_smoke, bt_cross_smoke, bt_long_awp, …)
-        └── op11_county_2/ (bt_firebomb*, bt_smoke_*, bt_bot_1..5), op11_blacksite_1/ (bt_parachute_1), …
-```
-
-### 29.3. Упаковка и поставка деревьев
-
-| Факт | Детали |
-|---|---|
-| Упаковка в BSP | С 01.09.2020 деревья можно паковать в сам BSP-файл карты |
-| Workshop-аддоны | Могут поставлять деревья в свой `scripts/ai/` |
-| Per-spawn дерево | Ключ `behavior_tree_file` на `info_enemy_terrorist_spawn` (CS:GO Co-op Strike) — назначает дерево конкретной спавн-энтити |
-| Смена дерева без рестарта | При включённых респавнах достаточно убить бота — при возрождении он возьмёт дерево заново (полезно при отладке) |
-
-### 29.4. История
-
-| Дата | Событие |
-|---|---|
-| 16.09.2019 | Behavior Trees добавлены в CS:GO (Co-op Strike / Guardian) |
-| 01.09.2020 | Деревья можно паковать в BSP |
-| 2023 (CS2) | BT переработаны: конфиги упрощены до 13 строк, добавлены `append_items`, hostage-сенсор в DM, Practice-дерево newplayer_dust2_01 |
-
----
-
-> **Note**
->
-> Если нужна полная таблица всех 519 Guardian-файлов по картам или полный инвентарь всех `type =` со счётчиками — их можно сгенерировать напрямую из дампов; каркас разделов §25–§26 для этого уже готов.
